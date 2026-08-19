@@ -1,0 +1,150 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-heading);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  /* Light Mode */
+  /* Background: Gray-50 */
+  --background: hsl(210, 20%, 98%);
+  /* Foreground: Gray-900 */
+  --foreground: hsl(222, 47%, 11%);
+  /* Card: White */
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(222, 47%, 11%);
+  /* Popover: White */
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(222, 47%, 11%);
+  /* Primary: Indigo-600 */
+  --primary: hsl(243, 75%, 59%);
+  --primary-foreground: hsl(210, 40%, 98%);
+  /* Secondary: Violet-100 */
+  --secondary: hsl(262, 80%, 96%);
+  --secondary-foreground: hsl(262, 80%, 40%);
+  /* Muted: Gray-100 */
+  --muted: hsl(210, 40%, 96%);
+  --muted-foreground: hsl(215, 16%, 47%);
+  /* Accent: Emerald-500 */
+  --accent: hsl(160, 84%, 39%);
+  --accent-foreground: hsl(210, 40%, 98%);
+  /* Destructive: Red-500 */
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  /* Border & Input: Gray-200 */
+  --border: hsl(214, 32%, 91%);
+  --input: hsl(214, 32%, 91%);
+  /* Ring: Indigo-600 */
+  --ring: hsl(243, 75%, 59%);
+
+  --radius: 0.75rem; /* 12px */
+
+  /* Sidebar Light */
+  --sidebar: hsl(210, 20%, 98%);
+  --sidebar-foreground: hsl(222, 47%, 11%);
+  --sidebar-primary: hsl(243, 75%, 59%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent: hsl(214, 32%, 91%);
+  --sidebar-accent-foreground: hsl(222, 47%, 11%);
+  --sidebar-border: hsl(214, 32%, 91%);
+  --sidebar-ring: hsl(243, 75%, 59%);
+}
+
+.dark {
+  /* Dark Mode */
+  /* Background: Slate-900 */
+  --background: hsl(222, 47%, 11%);
+  /* Foreground: Gray-50 */
+  --foreground: hsl(210, 40%, 98%);
+  /* Card: Slate-800 */
+  --card: hsl(222, 47%, 15%);
+  --card-foreground: hsl(210, 40%, 98%);
+  /* Popover: Slate-800 */
+  --popover: hsl(222, 47%, 15%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  /* Primary: Indigo-500 (lighter for contrast) */
+  --primary: hsl(243, 75%, 65%);
+  --primary-foreground: hsl(222, 47%, 11%);
+  /* Secondary: Slate-700 */
+  --secondary: hsl(217, 33%, 25%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  /* Muted: Slate-800 */
+  --muted: hsl(217, 33%, 17%);
+  --muted-foreground: hsl(215, 20%, 65%);
+  /* Accent: Emerald-400 */
+  --accent: hsl(160, 84%, 45%);
+  --accent-foreground: hsl(222, 47%, 11%);
+  /* Destructive: Red-500 (dark mode) */
+  --destructive: hsl(0, 63%, 50%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  /* Border & Input: Slate-700 */
+  --border: hsl(217, 33%, 25%);
+  --input: hsl(217, 33%, 25%);
+  /* Ring: Indigo-500 */
+  --ring: hsl(243, 75%, 65%);
+
+  /* Sidebar Dark */
+  --sidebar: hsl(222, 47%, 11%);
+  --sidebar-foreground: hsl(210, 40%, 98%);
+  --sidebar-primary: hsl(243, 75%, 65%);
+  --sidebar-primary-foreground: hsl(222, 47%, 11%);
+  --sidebar-accent: hsl(217, 33%, 25%);
+  --sidebar-accent-foreground: hsl(210, 40%, 98%);
+  --sidebar-border: hsl(217, 33%, 25%);
+  --sidebar-ring: hsl(243, 75%, 65%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /* Custom Focus Visible outline for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
