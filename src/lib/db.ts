@@ -3,13 +3,16 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 
 const prismaClientSingleton = () => {
-  // Use pg Pool for the adapter
   const connectionString = process.env.DATABASE_URL;
-  // If connection string is empty (e.g. during build or initial setup), just return a dummy client or handle it safely.
-  // In a real app, you might want it to crash if there is no URL at runtime, but Next.js might run code at build time.
-  const pool = new pg.Pool({
-    connectionString: connectionString || 'postgresql://dummy:dummy@localhost:5432/dummy',
-  });
+
+  if (!connectionString) {
+    throw new Error(
+      'DATABASE_URL environment variable is not set. ' +
+      'Set it in your .env file (local) or Vercel Environment Variables (production).'
+    );
+  }
+
+  const pool = new pg.Pool({ connectionString });
   const adapter = new PrismaPg(pool);
 
   return new PrismaClient({ adapter });
