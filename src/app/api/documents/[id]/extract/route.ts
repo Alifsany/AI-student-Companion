@@ -50,10 +50,17 @@ export async function POST(
 
     const ocrMode = req.nextUrl.searchParams.get('ocr') === 'true';
 
-    
     let fileBuffer: Buffer;
     try {
-      fileBuffer = await readFile(document.fileUrl);
+      if (document.fileUrl.startsWith('http')) {
+        const response = await fetch(document.fileUrl);
+        if (!response.ok) throw new Error('Failed to fetch blob');
+        const arrayBuffer = await response.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
+      } else {
+        const { readFile } = require('fs/promises');
+        fileBuffer = await readFile(document.fileUrl);
+      }
     } catch (e) {
       return NextResponse.json({ error: 'Failed to read file' }, { status: 500 });
     }
@@ -89,7 +96,11 @@ export async function POST(
     } else {
       // Step 3: Run Professional AI OCR
       try {
-                const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
+                const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+        if (!apiKey) {
+          return NextResponse.json({ success: false, error: 'OCR_FAILED', message: 'AI service is not configured on this server.' }, { status: 500 });
+        }
+        const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: AI_MODEL_NAME });
         const prompt = "Extract all readable text from this scanned PDF exactly as it appears. Maintain the exact page order. Do not summarize or add markdown formatting. If the document is totally empty or contains no readable text, return exactly 'NO_TEXT_FOUND'.";
         

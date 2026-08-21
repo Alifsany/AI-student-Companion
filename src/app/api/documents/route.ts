@@ -1,15 +1,16 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/dal';
 import db from '@/lib/db';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
+import { put } from '@vercel/blob';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const STORAGE_DIR = join(process.cwd(), 'storage', 'documents');
 
-if (!fs.existsSync(STORAGE_DIR)) {
+if (!process.env.BLOB_READ_WRITE_TOKEN && !fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
 }
 
@@ -68,20 +69,30 @@ export async function POST(req: NextRequest) {
 
     const originalFilename = file.name;
     const sanitizedFilename = originalFilename.replace(/[^a-zA-Z0-9.\-_ ]/g, '').trim() || 'document.pdf';
-
     const uniqueId = randomUUID();
     const storedFileName = `${uniqueId}.pdf`;
-    const storedFilePath = join(STORAGE_DIR, storedFileName);
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    await writeFile(storedFilePath, buffer);
+    let fileUrl = '';
+
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const blob = await put(storedFileName, file, { access: 'public' });
+      fileUrl = blob.url;
+    } else {
+      if (process.env.VERCEL === '1') {
+        return NextResponse.json({ error: 'PDF uploads are not available. Vercel Blob is not configured (missing BLOB_READ_WRITE_TOKEN).' }, { status: 503 });
+      }
+      const storedFilePath = join(STORAGE_DIR, storedFileName);
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      await writeFile(storedFilePath, buffer);
+      fileUrl = storedFilePath;
+    }
 
     const document = await db.document.create({
       data: {
         userId: session.userId,
         filename: sanitizedFilename,
-        fileUrl: storedFilePath,
+        fileUrl: fileUrl,
         fileType: file.type,
         size: file.size,
         status: 'PROCESSING',

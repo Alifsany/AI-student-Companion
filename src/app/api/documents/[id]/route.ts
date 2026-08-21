@@ -1,7 +1,8 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/dal';
 import db from '@/lib/db';
 import { readFile, unlink } from 'fs/promises';
+import { del } from '@vercel/blob';
 
 export async function GET(
   req: NextRequest,
@@ -24,6 +25,10 @@ export async function GET(
 
     if (document.userId !== session.userId) {
       return new NextResponse('Forbidden', { status: 403 });
+    }
+
+    if (document.fileUrl.startsWith('http')) {
+      return NextResponse.redirect(document.fileUrl);
     }
 
     const fileBuffer = await readFile(document.fileUrl);
@@ -64,7 +69,11 @@ export async function DELETE(
     }
 
     try {
-      await unlink(document.fileUrl);
+      if (document.fileUrl.startsWith('http')) {
+        await del(document.fileUrl);
+      } else {
+        await unlink(document.fileUrl);
+      }
     } catch (fsError: any) {
       if (fsError.code !== 'ENOENT') {
         console.error('[DELETE /api/documents/[id]] File deletion error:', fsError);

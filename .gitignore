@@ -45,3 +45,6 @@ next-env.d.ts
 
 # local uploaded documents
 /storage/
+
+# scratch/dev files
+current-dashboard.txt
