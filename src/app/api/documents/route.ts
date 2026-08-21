@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         console.warn('Vercel environment detected but BLOB_READ_WRITE_TOKEN might be hidden during build. @vercel/blob will attempt to read it at runtime.');
       }
       try {
-        const blob = await put(storedFileName, file, { access: 'public' });
+        const blob = await put(storedFileName, file, { access: 'private' });
         fileUrl = blob.url;
       } catch (err: any) {
         console.error('Blob upload error:', err);

@@ -4,6 +4,7 @@ import { verifySession } from '@/lib/dal';
 import db from '@/lib/db';
 import { readFile } from 'fs/promises';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { get } from '@vercel/blob';
 import PDFParser from 'pdf2json';
 
 function sanitizeExtractedText(text: string): string {
@@ -53,9 +54,9 @@ export async function POST(
     let fileBuffer: Buffer;
     try {
       if (document.fileUrl.startsWith('http')) {
-        const response = await fetch(document.fileUrl);
-        if (!response.ok) throw new Error('Failed to fetch blob');
-        const arrayBuffer = await response.arrayBuffer();
+        const getBlobResult = await get(document.fileUrl, { access: 'private' });
+        if (!getBlobResult || !getBlobResult.stream) throw new Error('Failed to fetch private blob');
+        const arrayBuffer = await new Response(getBlobResult.stream).arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
       } else {
         fileBuffer = await readFile(document.fileUrl);

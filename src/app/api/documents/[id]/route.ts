@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/dal';
 import db from '@/lib/db';
 import { readFile, unlink } from 'fs/promises';
-import { del } from '@vercel/blob';
+import { del, get } from '@vercel/blob';
 
 export async function GET(
   req: NextRequest,
@@ -28,7 +28,16 @@ export async function GET(
     }
 
     if (document.fileUrl.startsWith('http')) {
-      return NextResponse.redirect(document.fileUrl);
+      const getBlobResult = await get(document.fileUrl, { access: 'private' });
+      if (!getBlobResult || !getBlobResult.stream) {
+        return NextResponse.json({ error: 'Private blob not found or could not be streamed.' }, { status: 404 });
+      }
+      return new NextResponse(getBlobResult.stream, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${document.filename}"`,
+        },
+      });
     }
 
     const fileBuffer = await readFile(document.fileUrl);

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ export function WorkspaceClient({ document }: { document: DocumentData }) {
             </div>
           </div>
         </div>
-        <a href={document.fileUrl} target="_blank" rel="noopener noreferrer">
+        <a href={`/api/documents/${document.id}`} target="_blank" rel="noopener noreferrer">
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Original PDF
