@@ -68,16 +68,22 @@ export async function POST(req: NextRequest) {
     const uniqueId = randomUUID();
     const storedFileName = `${uniqueId}.pdf`;
 
+    const isVercel = process.env.VERCEL === '1';
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN || process.env['BLOB_READ_WRITE_TOKEN'];
     let fileUrl = '';
 
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      const blob = await put(storedFileName, file, { access: 'public' });
-      fileUrl = blob.url;
-    } else {
-      if (process.env.VERCEL === '1') {
-        return NextResponse.json({ error: 'PDF uploads are not available. Vercel Blob is not configured (missing BLOB_READ_WRITE_TOKEN).' }, { status: 503 });
+    if (isVercel || blobToken) {
+      if (!blobToken && isVercel) {
+        console.warn('Vercel environment detected but BLOB_READ_WRITE_TOKEN might be hidden during build. @vercel/blob will attempt to read it at runtime.');
       }
-
+      try {
+        const blob = await put(storedFileName, file, { access: 'public' });
+        fileUrl = blob.url;
+      } catch (err: any) {
+        console.error('Blob upload error:', err);
+        return NextResponse.json({ error: 'Failed to upload to cloud storage: ' + (err.message || 'Unknown error') }, { status: 500 });
+      }
+    } else {
       const STORAGE_DIR = join(process.cwd(), 'storage', 'documents');
       if (!fs.existsSync(STORAGE_DIR)) {
         fs.mkdirSync(STORAGE_DIR, { recursive: true });
