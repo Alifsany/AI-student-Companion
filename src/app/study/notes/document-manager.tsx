@@ -1,16 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { UploadCloud, FileText, Trash2, ExternalLink, Loader2, FileUp, RefreshCw,  Sparkles } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { UploadCloud, FileText, Trash2, ExternalLink, Loader2, FileUp, RefreshCw, Sparkles } from "lucide-react";
+import { upload } from '@vercel/blob/client';
 
 function formatBytes(bytes: number) { if (bytes === 0) return '0 Bytes'; const k = 1024; const sizes = ['Bytes', 'KB', 'MB', 'GB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]; }
 
@@ -26,20 +21,17 @@ type Document = {
   summaryError?: string | null;
 };
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
 export function DocumentManager() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusText, setUploadStatusText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Summarization loading state tracking
-    
-  // Dialog state
-  const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
-  const [viewMode, setViewMode] = useState<'text' | 'summary'>('text');
-  const [dialogContent, setDialogContent] = useState<string | null>(null);
-  const [isDialogLoading, setIsDialogLoading] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,7 +50,6 @@ export function DocumentManager() {
       }
     } catch (err) {
       console.error(err);
-      setError("Failed to load documents.");
     } finally {
       setIsLoading(false);
     }
@@ -69,12 +60,11 @@ export function DocumentManager() {
     setIsDragging(true);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDragLeave = () => {
     setIsDragging(false);
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
@@ -90,45 +80,76 @@ export function DocumentManager() {
 
   const handleUpload = async (file: File) => {
     setError(null);
+    setSuccessMsg(null);
+    setUploadProgress(0);
     
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
       setError("Only PDF files are supported.");
       return;
     }
     
-    if (file.size > 10 * 1024 * 1024) {
-      setError("File size must be less than 10MB.");
+    if (file.size > MAX_FILE_SIZE) {
+      setError("File is too large. Maximum allowed size is 50 MB.");
       return;
     }
 
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
+    setUploadStatusText("Requesting upload token...");
 
     try {
-      const res = await fetch("/api/documents", {
+      setUploadStatusText("Uploading to secure storage...");
+
+      // Upload file directly to Vercel Blob from the client using the handleUploadUrl
+      const blobResult = await upload(file.name, file, {
+        access: 'private',
+        handleUploadUrl: '/api/documents/upload',
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentage = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+            setUploadProgress(percentage);
+            setUploadStatusText(`Uploading PDF... ${percentage}%`);
+          }
+        }
+      });
+
+      setUploadStatusText("Saving document record...");
+
+      // Create document record in database
+      const dbRes = await fetch("/api/documents", {
         method: "POST",
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: blobResult.url,
+          pathname: blobResult.pathname,
+          filename: file.name,
+          size: file.size
+        }),
       });
       
-      const data = await res.json();
+      const data = await dbRes.json();
       
-      if (!res.ok) {
-        throw new Error(data.error || "Upload failed");
+      if (!dbRes.ok) {
+        throw new Error(data.error || "Failed to save document record");
       }
       
       setDocuments((docs) => [data, ...docs]);
+      setSuccessMsg("PDF uploaded successfully.");
       
       // Auto-extract
       handleExtract(data.id);
       
     } catch (err) {
-      setError((err instanceof Error ? err.message : String(err)) || "An error occurred during upload.");
+      console.error("Upload error:", err);
+      setError((err instanceof Error ? err.message : String(err)) || "Upload failed. Please try again.");
     } finally {
       setIsUploading(false);
+      setUploadStatusText("");
+      setUploadProgress(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      // clear success message after a few seconds
+      setTimeout(() => setSuccessMsg(null), 5000);
     }
   };
 
@@ -156,7 +177,7 @@ export function DocumentManager() {
     }
   };
 
-    const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this document?")) return;
     
     try {
@@ -175,8 +196,6 @@ export function DocumentManager() {
     }
   };
 
-  
-  
   return (
     <div className="space-y-8">
       <div 
@@ -205,18 +224,29 @@ export function DocumentManager() {
           </div>
           <div>
             <p className="text-lg font-medium">
-              {isUploading ? "Uploading..." : "Click or drag and drop to upload"}
+              {isUploading ? uploadStatusText || "Uploading..." : "Click or drag and drop to upload"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              PDF files only, up to 10MB
+              Maximum file size: 50 MB
             </p>
+            {isUploading && uploadProgress > 0 && (
+               <div className="w-64 max-w-full bg-muted rounded-full h-2 mt-4 mx-auto overflow-hidden">
+                 <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+               </div>
+            )}
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-lg">
+        <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-lg flex items-center">
           {error}
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="bg-green-500/10 text-green-600 dark:text-green-400 text-sm p-4 rounded-lg flex items-center">
+          {successMsg}
         </div>
       )}
 
@@ -252,90 +282,60 @@ export function DocumentManager() {
                     </Badge>
                   </div>
                   
-                  <div className="text-xs text-muted-foreground mb-2">
-                    {formatBytes(doc.size)} • {new Date(doc.createdAt).toLocaleDateString()}
-                  </div>
-
-                  {doc.status === "FAILED" && doc.extractionError && (
-                    <div className="text-[10px] text-destructive mb-2 line-clamp-2" title={doc.extractionError}>
-                      {doc.extractionError}
+                  <div className="text-xs text-muted-foreground mb-4 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Size:</span>
+                      <span>{formatBytes(doc.size)}</span>
                     </div>
-                  )}
-
-                  {doc.summaryError && (
-                    <div className="text-[10px] text-destructive mb-2 line-clamp-2" title={doc.summaryError}>
-                      {doc.summaryError}
+                    <div className="flex justify-between">
+                      <span>Added:</span>
+                      <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
                     </div>
-                  )}
-                  
-                  <div className="mt-auto flex gap-2 pt-2 border-t flex-wrap">
-                    <a 
-                      href={`/api/documents/${doc.id}`} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 shrink-0"
-                    >
-                      <ExternalLink className="w-3 h-3 mr-2" />
-                      PDF
-                    </a>
-
-                    {doc.status === "READY" && (
-                      <a 
-                        href={`/study/notes/${doc.id}`}
-                        className="inline-flex items-center justify-center rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-8 px-3 flex-1"
-                      >
-                        <Sparkles className="w-3 h-3 mr-2" />
-                        Open Workspace
-                      </a>
-                    )}
-
-                    {doc.status === "PROCESSING" && (
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        className="flex-1 text-xs"
-                        disabled
-                      >
-                        <Loader2 className="w-3 h-3 mr-2 animate-spin shrink-0" />
-                        <span className="truncate">Extracting text...</span>
-                      </Button>
-                    )}
-
-                    {doc.status === "RUNNING_OCR" && (
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        className="flex-1 text-[10px]"
-                        disabled
-                      >
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin shrink-0" />
-                        <span className="truncate">Scanned PDF detected. Running OCR...</span>
-                      </Button>
-                    )}
-
-                    {doc.status === "FAILED" && (
-                      <div className="flex-1 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground italic mr-2">Try another PDF</span>
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          className="text-xs"
-                          onClick={() => handleExtract(doc.id)}
-                        >
-                          <RefreshCw className="w-3 h-3 mr-1" />
-                          Retry
-                        </Button>
+                    {doc.status === 'FAILED' && doc.extractionError && (
+                      <div className="mt-2 text-destructive/80 bg-destructive/10 p-2 rounded line-clamp-2" title={doc.extractionError}>
+                        Error: {doc.extractionError}
                       </div>
                     )}
-
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive px-2 shrink-0"
-                      onClick={() => handleDelete(doc.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                  </div>
+                  
+                  <div className="mt-auto flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => window.open(`/study/notes/${doc.id}`, '_blank')}
+                        disabled={doc.status !== "READY"}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Open Workspace
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="px-2"
+                        onClick={() => handleDelete(doc.id)}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                    
+                    {doc.status !== 'READY' && (
+                       <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full text-xs h-7"
+                        onClick={() => handleExtract(doc.id)}
+                        disabled={doc.status === 'PROCESSING' || doc.status === 'RUNNING_OCR'}
+                      >
+                        {doc.status === 'PROCESSING' || doc.status === 'RUNNING_OCR' ? (
+                          <><Loader2 className="w-3 h-3 mr-2 animate-spin" /> Extracting Text...</>
+                        ) : (
+                          <><RefreshCw className="w-3 h-3 mr-2" /> Retry Extraction</>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -343,32 +343,6 @@ export function DocumentManager() {
           </div>
         )}
       </div>
-
-      <Dialog open={!!viewingDoc} onOpenChange={(open) => !open && setViewingDoc(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-8">
-              {viewMode === 'summary' ? `Summary: ${viewingDoc?.filename}` : viewingDoc?.filename}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto bg-muted/50 p-4 rounded-md border text-sm whitespace-pre-wrap relative font-sans leading-relaxed">
-            {isDialogLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : dialogContent ? (
-              viewMode === 'text' && dialogContent.length > 50000 
-                ? dialogContent.slice(0, 50000) + "\n\n... [Preview Truncated due to size]" 
-                : dialogContent
-            ) : (
-              <span className="text-muted-foreground italic">
-                {viewMode === 'summary' ? 'No summary found.' : 'No text found.'}
-              </span>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
     </div>
   );
 }
