@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import db from '@/lib/db';
 import { getCurrentUser, getProfileCompletion } from '@/lib/dal';
@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const metadata = {
-  title: 'Dashboard ?" AI Student Companion',
+  title: 'Dashboard &rarr; AI Student Companion',
   description: 'Your personal academic dashboard',
 };
 
@@ -87,15 +87,8 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Top Header */}
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-16 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3 md:hidden">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary">
-              <Sparkles className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="font-heading font-semibold text-foreground">AI Companion</span>
-          </div>
-          <div className="hidden md:block"></div>
+      <header className="md:sticky md:top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex h-16 w-full items-center justify-end px-4 sm:px-6 lg:px-8">
 
           <div className="flex items-center gap-3">
             <Avatar className="h-8 w-8">
@@ -139,7 +132,7 @@ export default async function DashboardPage() {
               </div>
               <Progress value={completionPercent} className="h-2 mb-2" />
               <Link href="/profile/edit" className="text-xs text-primary hover:underline font-medium">
-                Complete profile ?"
+                Complete profile &rarr;
               </Link>
             </div>
           )}
@@ -260,7 +253,7 @@ export default async function DashboardPage() {
                 Academic Overview
               </h2>
               <Link href="/academic-performance" className="text-xs text-primary hover:underline font-medium">
-                View all ?"
+                View all &rarr;
               </Link>
             </div>
 
@@ -310,10 +303,10 @@ export default async function DashboardPage() {
                 )}
               </div>
 
-              {/* Today's Plan Snippet */}
+              {/* Today&apos;s Plan Snippet */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm">Today's Study Plan</h3>
+                  <h3 className="font-semibold text-sm">Today&apos;s Study Plan</h3>
                   <Link href="/study-planner" className="text-[10px] uppercase font-bold text-muted-foreground hover:text-foreground">View all</Link>
                 </div>
                 {todaysPlan.length === 0 ? (
@@ -351,7 +344,7 @@ export default async function DashboardPage() {
                 Current Goals
               </h2>
               <Link href="/goals" className="text-xs text-primary hover:underline font-medium">
-                All goals ?"
+                All goals &rarr;
               </Link>
             </div>
 

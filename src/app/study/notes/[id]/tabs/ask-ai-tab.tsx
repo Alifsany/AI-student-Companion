@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, User, Bot, Loader2, MessageSquare } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; formulas?: { formula: string, explanation: string }[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
 
@@ -52,21 +54,27 @@ export function AskAiTab({ document }: { document: DocumentData }) {
             </div>
           </div>
         ) : (
-          messages.map((m) => (
+          messages.map((m) => {
+            const messageText = ('content' in m ? m.content as string : '') ||
+                    ('parts' in m && Array.isArray(m.parts)
+                      ? (m as any).parts.map((p: { type: string; text?: string }) => p.text || '')
+                          .join('')
+                      : '') ||
+                    '';
+            return (
             <div key={m.id} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {m.role !== 'user' && (
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
               )}
-              <div className={`max-w-[85%] rounded-lg p-4 ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted/50 border'}`}>
-                <div className="whitespace-pre-wrap leading-relaxed">
-                  {('content' in m ? m.content as string : '') ||
-                    ('parts' in m && Array.isArray(m.parts)
-                      ? (m as any).parts.map((p: { type: string; text?: string }) => p.text || '')
-                          .join('')
-                      : '') ||
-                    ''}
+              <div className={`max-w-[85%] rounded-lg p-4 ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted/50 border'} overflow-hidden`}>
+                <div className={`prose prose-sm dark:prose-invert max-w-none ${m.role === 'user' ? 'text-primary-foreground' : ''}`}>
+                  {m.role === 'user' ? (
+                     <div className="whitespace-pre-wrap">{messageText}</div>
+                  ) : (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{messageText}</ReactMarkdown>
+                  )}
                 </div>
               </div>
               {m.role === 'user' && (
@@ -75,7 +83,7 @@ export function AskAiTab({ document }: { document: DocumentData }) {
                 </div>
               )}
             </div>
-          ))
+          )})
         )}
         {status === 'streaming' && messages[messages.length - 1]?.role === 'user' && (
           <div className="flex gap-3 justify-start">

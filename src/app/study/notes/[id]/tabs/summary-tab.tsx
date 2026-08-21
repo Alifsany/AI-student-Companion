@@ -1,11 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, Loader2, Sparkles, RefreshCw } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; formulas?: { formula: string, explanation: string }[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
-
+type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryText?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; formulas?: { formula: string, explanation: string }[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
 
 export function SummaryTab({ document }: { document: DocumentData }) {
   const [copied, setCopied] = useState(false);
@@ -98,7 +99,7 @@ export function SummaryTab({ document }: { document: DocumentData }) {
             </div>
           ) : summary ? (
             <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
-              {summary}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
             </div>
           ) : null}
         </div>

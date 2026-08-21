@@ -159,7 +159,7 @@ export function PlannerForm({
                     <SelectValue placeholder="Select a subject" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value=" ">None (General Study)</SelectItem>
+                    <SelectItem value="none">None (General Study)</SelectItem>
                     {subjects.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}
@@ -185,7 +185,7 @@ export function PlannerForm({
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {filteredTasks.map((t) => (
                         <SelectItem key={t.id} value={t.id}>
                           {t.title}
@@ -208,7 +208,7 @@ export function PlannerForm({
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {goals.map((g) => (
                         <SelectItem key={g.id} value={g.id}>
                           {g.title}

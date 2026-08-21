@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, List, Copy, Check } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; formulas?: { formula: string, explanation: string }[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
 
@@ -83,8 +85,8 @@ export function KeyTopicsTab({ document }: { document: DocumentData }) {
             <p className="text-sm mt-1">{error}</p>
           </div>
         ) : topics ? (
-          <div className="whitespace-pre-wrap leading-relaxed prose prose-sm dark:prose-invert">
-            {topics}
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{topics}</ReactMarkdown>
           </div>
         ) : null}
       </div>

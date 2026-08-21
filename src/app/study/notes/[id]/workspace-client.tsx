@@ -11,7 +11,7 @@ type DocumentData = { id: string; title?: string; extractedText?: string | null;
 
 export function WorkspaceClient({ document }: { document: DocumentData }) {
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)]">
+    <div className="flex flex-col h-auto lg:h-[calc(100vh-6rem)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-4">
@@ -47,7 +47,7 @@ export function WorkspaceClient({ document }: { document: DocumentData }) {
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 pb-6">
         {/* Left: Document Content */}
-        <div className="flex-1 lg:max-w-[65%] min-w-0 bg-card border rounded-lg overflow-hidden shadow-sm flex flex-col">
+        <div className="flex-1 lg:max-w-[65%] h-[50vh] lg:h-auto min-h-[400px] min-w-0 bg-card border rounded-lg overflow-hidden shadow-sm flex flex-col">
           <div className="p-3 border-b bg-muted/30 shrink-0">
             <span className="text-sm font-medium text-muted-foreground ml-2">Extracted Text Viewer</span>
           </div>
@@ -61,7 +61,7 @@ export function WorkspaceClient({ document }: { document: DocumentData }) {
         </div>
 
         {/* Right: AI Tools Panel */}
-        <div className="w-full lg:w-[35%] shrink-0 min-w-[320px] bg-card border rounded-lg overflow-hidden shadow-sm flex flex-col">
+        <div className="w-full lg:w-[35%] shrink-0 min-w-[320px] h-[60vh] lg:h-auto min-h-[500px] bg-card border rounded-lg overflow-hidden shadow-sm flex flex-col">
           <AiToolsPanel document={document} />
         </div>
       </div>

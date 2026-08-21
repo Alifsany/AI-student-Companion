@@ -179,8 +179,8 @@ export const AcademicRecordSchema = z.object({
 // Study Session schema
 // ---------------------------------------------------------------------------
 export const StudySessionSchema = z.object({
-  subjectId: z.string().optional().or(z.literal('')),
-  taskId: z.string().optional().or(z.literal('')),
+  subjectId: z.string().optional().or(z.literal('')).or(z.literal('none')).transform(val => val === 'none' ? '' : val),
+  taskId: z.string().optional().or(z.literal('')).or(z.literal('none')).transform(val => val === 'none' ? '' : val),
   type: z.enum(['POMODORO', 'CUSTOM']).default('POMODORO'),
   plannedDuration: z.coerce
     .number()
@@ -194,9 +194,9 @@ export const StudySessionSchema = z.object({
 // ---------------------------------------------------------------------------
 export const StudyPlanSchema = z.object({
   title: z.string().min(1, { message: 'Title is required.' }).max(100),
-  subjectId: z.string().optional().or(z.literal('')),
-  taskId: z.string().optional().or(z.literal('')),
-  goalId: z.string().optional().or(z.literal('')),
+  subjectId: z.string().optional().or(z.literal('')).or(z.literal('none')).transform(val => val === 'none' ? '' : val),
+  taskId: z.string().optional().or(z.literal('')).or(z.literal('none')).transform(val => val === 'none' ? '' : val),
+  goalId: z.string().optional().or(z.literal('')).or(z.literal('none')).transform(val => val === 'none' ? '' : val),
   plannedDate: z.string().min(1, { message: 'Date is required.' }),
   plannedDuration: z.coerce
     .number()
