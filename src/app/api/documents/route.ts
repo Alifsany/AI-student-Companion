@@ -8,11 +8,7 @@ import fs from 'fs';
 import { put } from '@vercel/blob';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const STORAGE_DIR = join(process.cwd(), 'storage', 'documents');
 
-if (!process.env.BLOB_READ_WRITE_TOKEN && !fs.existsSync(STORAGE_DIR)) {
-  fs.mkdirSync(STORAGE_DIR, { recursive: true });
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -81,6 +77,12 @@ export async function POST(req: NextRequest) {
       if (process.env.VERCEL === '1') {
         return NextResponse.json({ error: 'PDF uploads are not available. Vercel Blob is not configured (missing BLOB_READ_WRITE_TOKEN).' }, { status: 503 });
       }
+
+      const STORAGE_DIR = join(process.cwd(), 'storage', 'documents');
+      if (!fs.existsSync(STORAGE_DIR)) {
+        fs.mkdirSync(STORAGE_DIR, { recursive: true });
+      }
+
       const storedFilePath = join(STORAGE_DIR, storedFileName);
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);

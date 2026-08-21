@@ -4,6 +4,7 @@ import { verifySession } from '@/lib/dal';
 import db from '@/lib/db';
 import { readFile } from 'fs/promises';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import PDFParser from 'pdf2json';
 
 function sanitizeExtractedText(text: string): string {
   return text
@@ -12,9 +13,8 @@ function sanitizeExtractedText(text: string): string {
 }
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const PDFParser = require("pdf2json");
   return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser(null, 1);
+    const pdfParser = new (PDFParser as any)(null, 1);
     
     pdfParser.on("pdfParser_dataError", (errData: any) => reject(errData.parserError));
     pdfParser.on("pdfParser_dataReady", () => {
@@ -58,7 +58,6 @@ export async function POST(
         const arrayBuffer = await response.arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
       } else {
-        const { readFile } = require('fs/promises');
         fileBuffer = await readFile(document.fileUrl);
       }
     } catch (e) {

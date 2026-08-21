@@ -11,7 +11,7 @@ export async function GET(
   try {
     const session = await verifySession();
     if (!session?.isAuth) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = await params;
@@ -20,11 +20,11 @@ export async function GET(
     });
 
     if (!document) {
-      return new NextResponse('Document not found', { status: 404 });
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
     if (document.userId !== session.userId) {
-      return new NextResponse('Forbidden', { status: 403 });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     if (document.fileUrl.startsWith('http')) {
@@ -41,7 +41,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('[GET /api/documents/[id]] Error:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
