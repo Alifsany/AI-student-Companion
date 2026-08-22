@@ -28,11 +28,12 @@ export async function POST(req: Request) {
           }
 
           const token = await issueSignedToken({
-            allowedContentTypes: ['application/pdf'],
-            maximumSizeInBytes: 50 * 1024 * 1024,
-            pathname,
-            validUntil: Date.now() + 60 * 60 * 1000,
-          });
+  allowedContentTypes: ['application/pdf'],
+  maximumSizeInBytes: 50 * 1024 * 1024,
+  pathname,
+  validUntil: Date.now() + 60 * 60 * 1000,
+  operations: ['put'],
+});
 
           return {
             token,
