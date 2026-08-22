@@ -1,11 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UploadCloud, FileText, Trash2, ExternalLink, Loader2, FileUp, RefreshCw, Sparkles } from "lucide-react";
-import { upload } from '@vercel/blob/client';
+import { uploadPresigned } from '@vercel/blob/client';
 
 function formatBytes(bytes: number) { if (bytes === 0) return '0 Bytes'; const k = 1024; const sizes = ['Bytes', 'KB', 'MB', 'GB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]; }
 
@@ -23,7 +23,7 @@ type Document = {
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
-export function DocumentManager() {
+export function DocumentManager({ userId }: { userId: string }) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -99,9 +99,13 @@ export function DocumentManager() {
     try {
       setUploadStatusText("Uploading to secure storage...");
 
-      // Upload file directly to Vercel Blob from the client using the handleUploadUrl
-      const blobResult = await upload(file.name, file, {
-        access: 'private',
+      const uniqueId = crypto.randomUUID();
+      const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.\-_ ]/g, '').trim() || 'document.pdf';
+      const clientPathname = `users/${userId}/${uniqueId}-${sanitizedFilename}`;
+
+      // Upload file directly to Vercel Blob from the client using the presigned URL flow
+      const blobResult = await uploadPresigned(clientPathname, file, {
+        access: 'public',
         handleUploadUrl: '/api/documents/upload',
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
@@ -346,3 +350,5 @@ export function DocumentManager() {
     </div>
   );
 }
+
+
