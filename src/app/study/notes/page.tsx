@@ -1,9 +1,9 @@
-import { verifySession, getCurrentUser } from '@/lib/dal';
+﻿import { verifySession, getCurrentUser } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { DocumentManager } from './document-manager';
 
 export const metadata = {
-  title: 'Notes & Documents — AI Student Companion',
+  title: 'Notes & Documents ?" AI Student Companion',
   description: 'Manage your academic documents and notes',
 };
 
@@ -33,7 +33,7 @@ export default async function NotesPage() {
             </ul>
           </div>
           
-          <DocumentManager />
+          <DocumentManager userId={user.id} />
         </div>
       </div>
     </div>
