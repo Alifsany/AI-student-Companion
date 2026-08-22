@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySession } from '@/lib/dal';
+import { getSession } from '@/lib/session';
 import db from '@/lib/db';
 import { head } from '@vercel/blob';
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await verifySession();
-    if (!session?.isAuth) {
+    const session = await getSession();
+    if (!session || !session.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.VERCEL_OIDC_TOKEN) {
+      return NextResponse.json(
+        { error: 'Vercel Blob is not configured. Missing BLOB_READ_WRITE_TOKEN or VERCEL_OIDC_TOKEN.' },
+        { status: 500 }
+      );
     }
 
     const body = await req.json();
@@ -21,33 +28,62 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File size exceeds 50MB limit.' }, { status: 400 });
     }
 
-    // Optional: verify the blob exists in our store and size matches (security check)
+    // MANDATORY SECURITY VERIFICATION: Do not trust browser inputs blindly.
+    // Ensure the blob actually exists in our Vercel Blob store and belongs to this user.
     try {
       const blobMetadata = await head(url);
-      if (blobMetadata.size !== size) {
-         console.warn(`Blob size mismatch: expected ${size}, got ${blobMetadata.size}`);
+
+      if (blobMetadata.size > 50 * 1024 * 1024) {
+         return NextResponse.json({ error: 'Verified file size exceeds 50MB limit.' }, { status: 400 });
+      }
+
+      // Also ensure the pathname contains the correct userId to prevent IDOR via malicious URL reuse
+      if (!blobMetadata.pathname.startsWith(`users/${session.userId}/`)) {
+         return NextResponse.json({ error: 'Blob does not belong to the authenticated user.' }, { status: 403 });
       }
     } catch (headError) {
-      console.warn('Failed to verify blob via head():', headError);
-      // Could fail if token is missing locally, we'll continue anyway to allow local dev if needed
+      console.error('Failed to verify blob via head():', headError);
+      return NextResponse.json({ error: 'Failed to verify uploaded blob.' }, { status: 400 });
     }
 
-    const document = await db.document.create({
-      data: {
-        userId: session.userId,
-        filename: filename,
-        fileUrl: url,
-        fileType: 'application/pdf',
-        size: size,
-        status: 'PROCESSING',
-      },
-    });
+    let document;
+    try {
+      document = await db.document.create({
+        data: {
+          userId: session.userId,
+          filename: filename,
+          fileUrl: url,
+          fileType: 'application/pdf',
+          size: size,
+          status: 'PROCESSING',
+        },
+      });
+    } catch (dbError) {
+      console.error('[POST /api/documents] Error creating document record:', dbError);
+      
+      // Attempt to clean up the orphaned blob since the DB record failed
+      try {
+        if (url.startsWith('http')) {
+           const { del } = await import('@vercel/blob');
+           await del(url);
+        }
+      } catch (cleanupError) {
+        console.error('Failed to clean up orphaned blob:', cleanupError);
+      }
+      
+      return NextResponse.json({ error: 'Failed to save document record' }, { status: 500 });
+    }
 
     return NextResponse.json({
       id: document.id,
       filename: document.filename,
+      fileType: document.fileType,
       size: document.size,
       status: document.status,
+      createdAt: document.createdAt.toISOString(),
+      extractionError: document.extractionError,
+      summaryGeneratedAt: document.summaryGeneratedAt ? document.summaryGeneratedAt.toISOString() : null,
+      summaryError: document.summaryError,
     });
   } catch (error) {
     console.error('[POST /api/documents] Error creating document record:', error);
@@ -57,8 +93,8 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await verifySession();
-    if (!session?.isAuth) {
+    const session = await getSession();
+    if (!session || !session.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -75,7 +111,13 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ documents });
+    const serializedDocuments = documents.map(doc => ({
+      ...doc,
+      createdAt: doc.createdAt.toISOString(),
+      summaryGeneratedAt: doc.summaryGeneratedAt ? doc.summaryGeneratedAt.toISOString() : null
+    }));
+
+    return NextResponse.json({ documents: serializedDocuments });
   } catch (error) {
     console.error('[GET /api/documents] Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

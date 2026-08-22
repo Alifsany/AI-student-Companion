@@ -73,20 +73,40 @@ export async function POST(
 
     let fileBuffer: Buffer;
     try {
-      if (document.fileUrl.startsWith('http')) {
-        const fetchResponse = await fetch(document.fileUrl);
-        if (!fetchResponse.ok) {
-          throw new Error(`Failed to fetch blob from URL: ${fetchResponse.statusText}`);
+      const isRemote = document.fileUrl.startsWith('http');
+      console.log(`[documents/extract] Starting extraction for document ${id}, isRemote=${isRemote}, fileUrl=${document.fileUrl}`);
+
+      if (isRemote) {
+        // Store is Private, so we must use access: 'private'
+        console.log(`[documents/extract] Using Vercel SDK get() with access: 'private'`);
+        const getBlobResult = await get(document.fileUrl, { access: 'private' });
+        
+        if (!getBlobResult) {
+          throw new Error('Blob not found (getBlobResult is null)');
         }
-        const arrayBuffer = await fetchResponse.arrayBuffer();
+        
+        console.log(`[documents/extract] get() returned statusCode: ${getBlobResult.statusCode}, contentType: ${getBlobResult.blob.contentType}`);
+        
+        if (!getBlobResult.stream) {
+          throw new Error(`Blob stream is null (statusCode: ${getBlobResult.statusCode})`);
+        }
+        
+        const arrayBuffer = await new Response(getBlobResult.stream).arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
+        console.log(`[documents/extract] Successfully buffered ${fileBuffer.length} bytes`);
       } else {
+        console.log(`[documents/extract] Validating and reading local path`);
         const localPath = getValidatedLocalPath(document.fileUrl, session.userId);
         fileBuffer = await readFile(localPath);
+        console.log(`[documents/extract] Successfully read local file, ${fileBuffer.length} bytes`);
       }
-    } catch (e) {
-      console.error('[documents/extract] Read Error:', e);
-      return NextResponse.json({ error: 'Failed to read file' }, { status: 500 });
+    } catch (e: any) {
+      console.error('[documents/extract] Read Error Details:', e);
+      return NextResponse.json({ 
+        error: 'Failed to read file', 
+        details: e.message || String(e),
+        urlType: document.fileUrl.startsWith('http') ? 'remote' : 'local'
+      }, { status: 500 });
     }
 
     let cleanText = "";

@@ -105,7 +105,7 @@ export function DocumentManager({ userId }: { userId: string }) {
 
       // Upload file directly to Vercel Blob from the client using the presigned URL flow
       const blobResult = await uploadPresigned(clientPathname, file, {
-        access: 'public',
+        access: 'private',
         handleUploadUrl: '/api/documents/upload',
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
@@ -293,7 +293,11 @@ export function DocumentManager({ userId }: { userId: string }) {
                     </div>
                     <div className="flex justify-between">
                       <span>Added:</span>
-                      <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
+                      <span>
+                        {doc.createdAt && !isNaN(new Date(doc.createdAt).getTime())
+                          ? new Date(doc.createdAt).toLocaleDateString()
+                          : "Date unavailable"}
+                      </span>
                     </div>
                     {doc.status === 'FAILED' && doc.extractionError && (
                       <div className="mt-2 text-destructive/80 bg-destructive/10 p-2 rounded line-clamp-2" title={doc.extractionError}>
