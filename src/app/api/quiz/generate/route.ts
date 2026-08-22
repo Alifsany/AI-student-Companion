@@ -89,7 +89,11 @@ export async function POST(req: Request) {
   let activeDocument = null;
   if (documentId) {
     activeDocument = await db.document.findFirst({
-      where: { extractedText: { not: null } },
+      where: { 
+        id: documentId, 
+        userId: session.userId,
+        extractedText: { not: null } 
+      },
     });
     
     if (!activeDocument) {

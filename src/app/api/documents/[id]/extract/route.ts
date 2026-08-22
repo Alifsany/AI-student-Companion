@@ -26,6 +26,26 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   });
 }
 
+import path from 'path';
+
+function getValidatedLocalPath(fileUrl: string, userId: string): string {
+  if (!fileUrl.startsWith('file://')) throw new Error('Not a local file URL');
+  let localPath = fileUrl.replace('file://', '');
+  
+  if (process.platform === 'win32' && localPath.match(/^\/[a-zA-Z]:\//)) {
+    localPath = localPath.substring(1);
+  }
+  
+  const normalizedPath = path.resolve(localPath);
+  const expectedPrefix = path.resolve(process.cwd(), '.local-storage', 'documents', 'users', userId);
+  
+  if (!normalizedPath.startsWith(expectedPrefix)) {
+    throw new Error('Path traversal detected or invalid directory');
+  }
+  
+  return normalizedPath;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -54,14 +74,18 @@ export async function POST(
     let fileBuffer: Buffer;
     try {
       if (document.fileUrl.startsWith('http')) {
-        const getBlobResult = await get(document.fileUrl, { access: 'private' });
-        if (!getBlobResult || !getBlobResult.stream) throw new Error('Failed to fetch private blob');
-        const arrayBuffer = await new Response(getBlobResult.stream).arrayBuffer();
+        const fetchResponse = await fetch(document.fileUrl);
+        if (!fetchResponse.ok) {
+          throw new Error(`Failed to fetch blob from URL: ${fetchResponse.statusText}`);
+        }
+        const arrayBuffer = await fetchResponse.arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
       } else {
-        fileBuffer = await readFile(document.fileUrl);
+        const localPath = getValidatedLocalPath(document.fileUrl, session.userId);
+        fileBuffer = await readFile(localPath);
       }
     } catch (e) {
+      console.error('[documents/extract] Read Error:', e);
       return NextResponse.json({ error: 'Failed to read file' }, { status: 500 });
     }
 
