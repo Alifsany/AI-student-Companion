@@ -11,7 +11,7 @@ type DocumentData = { id: string; title?: string; extractedText?: string | null;
 
 export function WorkspaceClient({ document }: { document: DocumentData }) {
   return (
-    <div className="flex flex-col h-auto lg:h-[calc(100vh-6rem)]">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-4">
