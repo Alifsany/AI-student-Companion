@@ -2,8 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAiModel } from '@/lib/ai-model';
 import { verifySession } from "@/lib/dal";
 import db from "@/lib/db";
-import { generateText } from "ai";
-import { google } from "@ai-sdk/google";
+import { generateObject } from "ai";
+import { z } from "zod";
+
+const FormulaSchema = z.object({
+  formulas: z.array(z.object({
+    formula: z.string(),
+    name: z.string(),
+    explanation: z.string(),
+    variables: z.array(z.object({
+      symbol: z.string(),
+      meaning: z.string(),
+      unit: z.string().optional()
+    })),
+    example: z.string().optional()
+  }))
+});
 
 export async function POST(
   req: NextRequest,
@@ -21,29 +35,32 @@ export async function POST(
 
     if (!document) return NextResponse.json({ error: "Document not found" }, { status: 404 });
     if (document.userId !== session.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (!document.extractedText) return NextResponse.json({ error: "No text" }, { status: 400 });
+    
+    if (!document.extractedText || document.extractedText.trim() === "") {
+      return NextResponse.json({ error: "Your PDF does not contain enough readable text to extract formulas." }, { status: 400 });
+    }
 
     if (document.formulas) {
       return NextResponse.json({ success: true, formulas: document.formulas });
     }
 
-    const systemPrompt = `You are an academic assistant. Use only the information contained in the provided document. Do not invent facts, formulas, definitions, or conclusions. If the requested information is not present, say so.
-Extract any mathematical or scientific formulas from the document content.
-If there are no formulas: output exactly "No formulas were found in this document."`;
+    const systemPrompt = `You are an academic assistant. Extract ONLY mathematical or scientific formulas from the provided document. Do not invent formulas. Preserve mathematical notation. Explain every variable. Include units and a short practical example when identifiable. If the document contains no meaningful formulas, return an empty formulas array.`;
 
-    const { text } = await generateText({
+    const { object } = await generateObject({
       model: getAiModel(),
       system: systemPrompt,
       prompt: `DOCUMENT CONTENT:\n${document.extractedText.slice(0, 100000)}`,
+      schema: FormulaSchema,
     });
 
     await db.document.update({
       where: { id },
-      data: { formulas: text },
+      data: { formulas: object as any },
     });
 
-    return NextResponse.json({ success: true, formulas: text });
+    return NextResponse.json({ success: true, formulas: object });
   } catch (error) {
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    console.error("[API /formulas] Error:", error);
+    return NextResponse.json({ error: "Unable to generate formulas right now. Please try again." }, { status: 500 });
   }
 }
