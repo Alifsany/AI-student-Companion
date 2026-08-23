@@ -10,12 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.VERCEL_OIDC_TOKEN) {
-      return NextResponse.json(
-        { error: 'Vercel Blob is not configured. Missing BLOB_READ_WRITE_TOKEN or VERCEL_OIDC_TOKEN.' },
-        { status: 500 }
-      );
-    }
+
 
     const body = await req.json();
     const { url, pathname, filename, size } = body;
