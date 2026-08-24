@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, MessageSquare, BookOpen, BrainCircuit, Calculator, FileText, Calendar, HardDrive } from "lucide-react";
 import { formatBytes } from "@/lib/utils";
 
-type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; formulas?: { formula: string, explanation: string }[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
+type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
 
 export function OverviewTab({ document, onNavigate }: { document: DocumentData, onNavigate: (tab: string) => void }) {
   return (
@@ -75,16 +75,6 @@ export function OverviewTab({ document, onNavigate }: { document: DocumentData, 
               Generate Quiz
             </CardTitle>
             <CardDescription>Test your knowledge with multiple-choice questions from the text.</CardDescription>
-          </CardHeader>
-        </Card>
-
-        <Card className="hover:border-primary/50 transition-colors cursor-pointer" onClick={() => onNavigate("formulas")}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Calculator className="w-5 h-5 text-rose-500" />
-              Extract Formulas
-            </CardTitle>
-            <CardDescription>Find and explain mathematical or scientific formulas used.</CardDescription>
           </CardHeader>
         </Card>
       </div>

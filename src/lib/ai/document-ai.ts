@@ -29,7 +29,7 @@ export async function getValidatedDocumentContext(documentId: string) {
       filename: true, 
       id: true, 
       status: true,
-      formulas: true,
+
       importantPoints: true,
       keyTopics: true,
       summaryText: true

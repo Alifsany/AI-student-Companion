@@ -186,7 +186,7 @@ export async function POST(req: Request) {
       modeInstructions = `EXPLANATION MODE: DETAILED
 - Provide a comprehensive, in-depth explanation.
 - Explain concepts rigorously, step-by-step.
-- Include relevant formulas, deeper reasoning, edge cases, and common mistakes where appropriate.
+- Include deeper reasoning, edge cases, and common mistakes where appropriate.
 - Use well-structured sections and bullet points.
 - Assume the student wants a deeper, academic understanding.
 - Avoid unnecessary repetition, but do not skimp on critical details.`;

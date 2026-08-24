@@ -29,7 +29,7 @@ export default async function NotesPage() {
               <li>AI-powered summaries</li>
 
               <li>Generate study notes & quizzes</li>
-              <li>Extract formulas and key points</li>
+              <li>Extract key points</li>
             </ul>
           </div>
           
