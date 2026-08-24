@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UploadCloud, FileText, Trash2, ExternalLink, Loader2, FileUp, AlertCircle, CheckCircle2, MoreVertical } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { upload } from "@vercel/blob/client";
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return '0 Bytes';
@@ -120,46 +121,57 @@ export function DocumentManager({ userId }: { userId: string }) {
     setUploadStatus("Uploading your PDF...");
     setUploadProgress(0);
     
-    const formData = new FormData();
-    formData.append("file", file);
-    
     abortControllerRef.current = new AbortController();
 
     try {
-      // Simulate progress since native fetch doesn't support progress events well yet
-      const progressInterval = setInterval(() => {
-        setUploadProgress(p => p >= 90 ? 90 : p + 10);
-      }, 300);
-
-      const res = await fetch("/api/documents/upload", {
-        method: "POST",
-        body: formData,
-        signal: abortControllerRef.current.signal,
+      // 1. Direct upload to Vercel Blob (bypasses Vercel Serverless payload limits)
+      const blobResult = await upload(file.name, file, {
+        access: 'private',
+        handleUploadUrl: '/api/documents/upload',
+        abortSignal: abortControllerRef.current.signal,
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.percentage) {
+            setUploadProgress(progressEvent.percentage);
+          } else if (progressEvent.loaded && progressEvent.total) {
+            setUploadProgress(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+          }
+        },
       });
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      setUploadStatus("Saving document metadata...");
 
-      const data = await res.json();
+      // 2. Save metadata to our database
+      const dbRes = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileUrl: blobResult.url,
+          filename: file.name,
+          size: file.size,
+        }),
+      });
 
-      if (!res.ok) {
-        throw new Error(data.message || data.error || "Upload failed. Please try again.");
+      const dbData = await dbRes.json();
+
+      if (!dbRes.ok) {
+        throw new Error(dbData.message || dbData.error || "Failed to save document record.");
       }
 
+      setUploadProgress(100);
       setUploadStatus("Preparing your study tools...");
       setSuccessMsg("PDF added successfully! Redirecting...");
-      setDocuments(prev => [data.document, ...prev]);
+      setDocuments(prev => [dbData.document, ...prev]);
       
       // Auto-extract logic
-      handleExtract(data.document.id);
+      handleExtract(dbData.document.id);
 
       // Navigate to the document workspace after a short delay
       setTimeout(() => {
-        router.push(`/study/notes/${data.document.id}`);
+        router.push(`/study/notes/${dbData.document.id}`);
       }, 1000);
 
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
         setError("Upload canceled.");
       } else {
         console.error("Upload error:", err);
