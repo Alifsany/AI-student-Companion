@@ -1,52 +1,58 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, Loader2, Sparkles, RefreshCw } from "lucide-react";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Copy, Check, Loader2, Sparkles, RefreshCw, AlertCircle } from "lucide-react";
 
-type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryText?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; formulas?: { formula: string, explanation: string }[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
+type SummaryData = {
+  title: string;
+  overview: string;
+  mainPoints: string[];
+  conclusion: string;
+};
 
-export function SummaryTab({ document }: { document: DocumentData }) {
+export function SummaryTab({ document }: { document: any }) {
+  const initialResult = document.aiResults?.find((r: any) => r.type === 'SUMMARY');
   const [copied, setCopied] = useState(false);
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const [summary, setSummary] = useState(document.summaryText || null);
-  const [error, setError] = useState(document.summaryError || null);
+  const [isSummarizing, setIsSummarizing] = useState(initialResult?.status === 'GENERATING');
+  const [summary, setSummary] = useState<SummaryData | null>(initialResult?.status === 'READY' ? initialResult.result : null);
+  const [error, setError] = useState<string | null>(null);
+
+  
 
   const handleCopy = () => {
     if (!summary) return;
-    navigator.clipboard.writeText(summary);
+    const text = `# ${summary.title}\n\n## Overview\n${summary.overview}\n\n## Main Points\n${summary.mainPoints.map(p => `- ${p}`).join('\n')}\n\n## Conclusion\n${summary.conclusion}`;
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const generateSummary = async () => {
+    if (isSummarizing) return;
     setIsSummarizing(true);
     setError(null);
     try {
       const res = await fetch(`/api/documents/${document.id}/summarize`, { method: "POST" });
-      const data = await res.json();
+      const result = await res.json();
       
-      if (res.ok && data.success) {
-        // Fetch the fresh summary
-        const sumRes = await fetch(`/api/documents/${document.id}/summary`);
-        const sumData = await sumRes.json();
-        if (sumData.summaryText) setSummary(sumData.summaryText);
+      if (res.ok && result.success) {
+        setSummary(result.data);
       } else {
-        setError(data.message || data.error || 'Failed to summarize');
+        setError(result.error?.message || 'We couldn\'t generate your summary right now.');
       }
     } catch (err) {
-      setError((err instanceof Error ? err.message : String(err)) || 'An error occurred during summarization');
+      setError('Something went wrong while connecting to the server. Please try again.');
     } finally {
       setIsSummarizing(false);
     }
   };
 
-  if (!document.extractedText) {
+  if (!document.extractedText || document.status !== 'READY') {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center border rounded-lg bg-muted/20">
-        <p className="text-muted-foreground mb-2">No text available to summarize.</p>
+      <div className="flex flex-col items-center justify-center h-full text-center p-6 text-muted-foreground">
+        <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary/50" />
+        <p>Your PDF is still being prepared. Please wait...</p>
       </div>
     );
   }
@@ -56,8 +62,8 @@ export function SummaryTab({ document }: { document: DocumentData }) {
       <div className="flex flex-col items-center justify-center h-full text-center p-6">
         <Sparkles className="w-12 h-12 text-blue-500 mb-4 opacity-80" />
         <h3 className="text-lg font-medium mb-2">Generate AI Summary</h3>
-        <p className="text-muted-foreground mb-6 max-w-md">
-          Create a comprehensive, structured summary of this document including key points, important concepts, and an overview.
+        <p className="text-muted-foreground mb-6 max-w-sm mx-auto text-sm">
+          Get a concise overview of this document, including the main points and conclusion.
         </p>
         <Button onClick={generateSummary}>
           <Sparkles className="w-4 h-4 mr-2" />
@@ -68,9 +74,12 @@ export function SummaryTab({ document }: { document: DocumentData }) {
   }
 
   return (
-    <div className="flex flex-col h-full ">
-      <div className="flex items-center justify-end p-2 border-b bg-muted/10">
-        <span className="text-sm font-medium text-muted-foreground ml-2">Document Summary</span>
+    <div className="flex flex-col h-full bg-card">
+      <div className="flex items-center justify-between p-3 border-b bg-muted/10 shrink-0">
+        <span className="text-sm font-medium text-foreground flex items-center">
+          <Sparkles className="w-4 h-4 mr-2 text-blue-500" />
+          Document Summary
+        </span>
         <div className="flex gap-2">
           {summary && (
             <Button variant="ghost" size="sm" onClick={handleCopy} className="h-8">
@@ -85,21 +94,51 @@ export function SummaryTab({ document }: { document: DocumentData }) {
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-6 md:p-8">
-        <div className="max-w-3xl mx-auto">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 min-h-0">
+        <div className="max-w-2xl mx-auto pb-8">
           {isSummarizing ? (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <div className="flex flex-col items-center justify-center py-20 space-y-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-muted-foreground animate-pulse">Reading and summarizing document...</p>
+              <p className="text-muted-foreground animate-pulse text-sm">Analyzing your document...</p>
             </div>
           ) : error ? (
-            <div className="bg-destructive/10 text-destructive p-4 rounded-md">
-              <p className="font-medium">Summary Error</p>
-              <p className="text-sm mt-1">{error}</p>
+            <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-xl flex items-start gap-3 my-4">
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">{error.includes('limit reached') || error.includes('AI_QUOTA') ? 'AI usage limit reached' : 'Something went wrong'}</p>
+                <p className="text-sm opacity-90 mt-1">{error}</p>
+                <Button variant="outline" size="sm" onClick={generateSummary} className="mt-3 bg-background">
+                  Try again
+                </Button>
+              </div>
             </div>
           ) : summary ? (
-            <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight text-foreground">{summary.title}</h2>
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Overview</h3>
+                <p className="text-sm md:text-base leading-relaxed">{summary.overview}</p>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Main Points</h3>
+                <ul className="space-y-2 text-sm md:text-base leading-relaxed">
+                  {summary.mainPoints.map((point, i) => (
+                    <li key={i} className="flex items-start">
+                      <span className="mr-3 text-primary mt-1.5 shrink-0">•</span>
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Conclusion</h3>
+                <p className="text-sm md:text-base leading-relaxed">{summary.conclusion}</p>
+              </div>
             </div>
           ) : null}
         </div>

@@ -103,9 +103,8 @@ export async function POST(
     } catch (e: any) {
       console.error('[documents/extract] Read Error Details:', e);
       return NextResponse.json({ 
-        error: 'Failed to read file', 
-        details: e.message || String(e),
-        urlType: document.fileUrl.startsWith('http') ? 'remote' : 'local'
+        success: false,
+        error: { code: 'FILE_READ_ERROR', message: 'Failed to securely read the uploaded file.' }
       }, { status: 500 });
     }
 
@@ -126,8 +125,10 @@ export async function POST(
             extractionError: 'Failed to parse PDF file. The file might be corrupted or malformed.',
           },
         });
-        
-        return NextResponse.json({ error: 'Failed to parse PDF' }, { status: 400 });
+        return NextResponse.json({ 
+          success: false, 
+          error: { code: 'PDF_PARSE_ERROR', message: 'Failed to parse PDF. The file might be corrupted.' } 
+        }, { status: 400 });
       }
 
       cleanText = sanitizeExtractedText(rawText).trim();
@@ -178,15 +179,20 @@ export async function POST(
     }
 
     try {
-      await db.document.update({
-        where: { id },
-        data: {
-          extractedText: cleanText,
-          extractedAt: new Date(),
-          status: 'READY',
-          extractionError: null,
-        },
-      });
+      await db.$transaction([
+        db.documentAIResult.deleteMany({
+          where: { documentId: id }
+        }),
+        db.document.update({
+          where: { id },
+          data: {
+            extractedText: cleanText,
+            extractedAt: new Date(),
+            status: 'READY',
+            extractionError: null,
+          },
+        })
+      ]);
 
             return NextResponse.json({
         success: true,

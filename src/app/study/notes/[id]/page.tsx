@@ -23,6 +23,7 @@ export default async function DocumentWorkspacePage({
 
   const document = await db.document.findUnique({
     where: { id },
+    include: { aiResults: true }
   });
 
   if (!document || document.userId !== user.id) {

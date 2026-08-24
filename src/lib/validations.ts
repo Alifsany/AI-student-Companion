@@ -148,6 +148,7 @@ export const TaskSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
   status: z.enum(['TODO', 'IN_PROGRESS', 'COMPLETED']).default('TODO'),
   subjectId: z.string().optional().or(z.literal('')),
+  taskId: z.string().optional().or(z.literal('')),
 });
 
 // ---------------------------------------------------------------------------

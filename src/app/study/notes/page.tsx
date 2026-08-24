@@ -1,4 +1,4 @@
-﻿import { verifySession, getCurrentUser } from '@/lib/dal';
+import { verifySession, getCurrentUser } from '@/lib/dal';
 import { redirect } from 'next/navigation';
 import { DocumentManager } from './document-manager';
 
@@ -27,7 +27,7 @@ export default async function NotesPage() {
             <ul className="text-sm text-muted-foreground mt-3 space-y-1 list-disc list-inside">
               <li>Extract text from PDFs</li>
               <li>AI-powered summaries</li>
-              <li>Ask questions about documents</li>
+
               <li>Generate study notes & quizzes</li>
               <li>Extract formulas and key points</li>
             </ul>

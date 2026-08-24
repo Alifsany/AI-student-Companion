@@ -72,7 +72,7 @@ export async function signIn(state: FormState, formData: FormData): Promise<Form
 
   // 3. Use constant-time comparison regardless of whether user exists
   //    This prevents email enumeration via timing differences.
-  const dummyHash = '$2b$12$invalidhashforenumerationprotectionXXXXXXXXXXXXXXXXXXXXX';
+  const dummyHash = '$2a$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW';
   const hashToCompare = user?.passwordHash ?? dummyHash;
 
   const passwordMatch = await bcrypt.compare(password, hashToCompare);

@@ -1,21 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getAiModel } from '@/lib/ai-model';
-import { verifySession } from "@/lib/dal";
-import db from "@/lib/db";
-import { generateObject } from "ai";
-import { z } from "zod";
+import { NextRequest, NextResponse } from 'next/server';
+import { getValidatedDocumentContext, generateWithCache, standardErrorResponse } from '@/lib/ai/document-ai';
+import { z } from 'zod';
+import db from '@/lib/db';
 
-const FormulaSchema = z.object({
+const FormulasSchema = z.object({
   formulas: z.array(z.object({
-    formula: z.string(),
     name: z.string(),
-    explanation: z.string(),
+    formula: z.string(),
     variables: z.array(z.object({
       symbol: z.string(),
-      meaning: z.string(),
-      unit: z.string().optional()
-    })),
-    example: z.string().optional()
+      meaning: z.string()
+    })).optional(),
+    usage: z.string().optional()
   }))
 });
 
@@ -24,43 +20,56 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await verifySession();
-    if (!session?.isAuth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const { id } = await params;
-    const document = await db.document.findUnique({
-      where: { id },
-      select: { userId: true, extractedText: true, formulas: true },
-    });
+    const validation = await getValidatedDocumentContext(id);
+    if (validation.error) return standardErrorResponse(validation.error);
 
-    if (!document) return NextResponse.json({ error: "Document not found" }, { status: 404 });
-    if (document.userId !== session.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    
-    if (!document.extractedText || document.extractedText.trim() === "") {
-      return NextResponse.json({ error: "Your PDF does not contain enough readable text to extract formulas." }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const forceNew = !!body.forceNew;
+
+    const systemPrompt = `You are an academic assistant. Use only the information contained in the provided document.
+Identify and extract important mathematical, scientific, or logical formulas. If the document has no formulas, return an empty array. Do not invent formulas not present in the document.`;
+
+    const result = await generateWithCache(
+      validation.context!,
+      'FORMULAS',
+      systemPrompt,
+      FormulasSchema,
+      "Extract the important formulas from this document.",
+      forceNew
+    );
+
+    if (!result.success) {
+      return NextResponse.json(result, { status: result.status || 500 });
     }
 
-    if (document.formulas) {
-      return NextResponse.json({ success: true, formulas: document.formulas });
-    }
-
-    const systemPrompt = `You are an academic assistant. Extract ONLY mathematical or scientific formulas from the provided document. Do not invent formulas. Preserve mathematical notation. Explain every variable. Include units and a short practical example when identifiable. If the document contains no meaningful formulas, return an empty formulas array.`;
-
-    const { object } = await generateObject({
-      model: getAiModel(),
-      system: systemPrompt,
-      prompt: `DOCUMENT CONTENT:\n${document.extractedText.slice(0, 100000)}`,
-      schema: FormulaSchema,
-    });
-
-    await db.document.update({
-      where: { id },
-      data: { formulas: object as any },
-    });
-
-    return NextResponse.json({ success: true, formulas: object });
+    return NextResponse.json(result);
   } catch (error) {
-    console.error("[API /formulas] Error:", error);
-    return NextResponse.json({ error: "Unable to generate formulas right now. Please try again." }, { status: 500 });
+    console.error('[documents/formulas] Server Error:', error);
+    return standardErrorResponse({ status: 500, code: 'INTERNAL_ERROR', message: 'An unexpected server error occurred.' });
+  }
+}
+
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const validation = await getValidatedDocumentContext(id);
+    if (validation.error) return standardErrorResponse(validation.error);
+
+    const cached = await db.documentAIResult.findUnique({
+      where: { documentId_type: { documentId: id, type: 'FORMULAS' } }
+    });
+
+    if (cached && cached.status === 'READY' && cached.result) {
+      return NextResponse.json({ success: true, data: cached.result });
+    }
+    
+    return NextResponse.json({ success: true, data: null });
+  } catch (error) {
+    return standardErrorResponse({ status: 500, code: 'INTERNAL_ERROR', message: 'An unexpected server error occurred.' });
   }
 }

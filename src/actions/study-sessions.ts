@@ -192,6 +192,7 @@ export async function completeStudySession(id: string) {
   revalidatePath('/study-sessions');
   revalidatePath('/study-planner');
   revalidatePath('/dashboard');
+  redirect(`/study-sessions/completed/${id}`);
 }
 
 export async function cancelStudySession(id: string) {

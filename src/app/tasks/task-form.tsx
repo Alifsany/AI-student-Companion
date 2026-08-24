@@ -1,8 +1,9 @@
+
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,9 +15,24 @@ import {
   CardDescription,
   CardFooter,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { type FormState } from '@/lib/validations';
-import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Plus, Loader2 } from 'lucide-react';
 import type { AcademicTask } from '@/generated/prisma/client';
+import { createSubjectInline } from '@/actions/study-planner-inline';
 
 type SubjectOption = {
   id: string;
@@ -32,10 +48,40 @@ type TaskFormProps = {
 export function TaskForm({ action, subjects, initialData }: TaskFormProps) {
   const [state, formAction, isPending] = useActionState(action, undefined);
 
-  // Format date for the input field (YYYY-MM-DD)
   const defaultDate = initialData?.dueDate
     ? new Date(initialData.dueDate).toISOString().split('T')[0]
     : '';
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialData?.subjectId || '');
+  
+  const [localSubjects, setLocalSubjects] = useState<SubjectOption[]>(subjects);
+  const [subjectModalOpen, setSubjectModalOpen] = useState(false);
+  const [isPendingSubject, startTransitionSubject] = useTransition();
+  const [subjectError, setSubjectError] = useState<string>('');
+
+  async function handleCreateSubject(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSubjectError('');
+    const fd = new FormData(e.currentTarget);
+    const name = (fd.get('name') as string).trim();
+    const code = (fd.get('code') as string).trim();
+    
+    if (!name) {
+      setSubjectError('Subject name is required.');
+      return;
+    }
+
+    startTransitionSubject(async () => {
+      const res = await createSubjectInline(name, code);
+      if (res.success && res.id && res.name) {
+        setLocalSubjects((prev) => [...prev, { id: res.id!, name: res.name! }]);
+        setSelectedSubjectId(res.id);
+        setSubjectModalOpen(false);
+      } else {
+        setSubjectError(res.message || "Unknown error");
+      }
+    });
+  }
 
   return (
     <div className="mx-auto max-w-2xl py-8 px-4 sm:px-6 lg:px-8">
@@ -90,20 +136,20 @@ export function TaskForm({ action, subjects, initialData }: TaskFormProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="type">Task Type</Label>
-                  <select
-                    id="type"
-                    name="type"
-                    defaultValue={initialData?.type || 'STUDY'}
-                    className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="ASSIGNMENT">Assignment</option>
-                    <option value="QUIZ">Quiz</option>
-                    <option value="EXAM">Exam</option>
-                    <option value="PROJECT">Project</option>
-                    <option value="PRESENTATION">Presentation</option>
-                    <option value="STUDY">Study Task</option>
-                    <option value="OTHER">Other</option>
-                  </select>
+                  <Select name="type" defaultValue={initialData?.type || 'STUDY'}>
+                    <SelectTrigger id="type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
+                      <SelectItem value="QUIZ">Quiz</SelectItem>
+                      <SelectItem value="EXAM">Exam</SelectItem>
+                      <SelectItem value="PROJECT">Project</SelectItem>
+                      <SelectItem value="PRESENTATION">Presentation</SelectItem>
+                      <SelectItem value="STUDY">Study Task</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {state?.errors?.type && (
                     <p className="text-xs font-medium text-destructive">{state.errors.type[0]}</p>
                   )}
@@ -112,20 +158,29 @@ export function TaskForm({ action, subjects, initialData }: TaskFormProps) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="subjectId">Subject</Label>
-                  <select
-                    id="subjectId"
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="subjectId">Subject</Label>
+                    <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setSubjectModalOpen(true)}>
+                      <Plus className="w-3 h-3 mr-1" /> Create Subject
+                    </Button>
+                  </div>
+                  <Select
                     name="subjectId"
-                    defaultValue={initialData?.subjectId || ''}
-                    className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={selectedSubjectId || 'none'}
+                    onValueChange={(val) => setSelectedSubjectId(val === 'none' ? '' : (val || ''))}
                   >
-                    <option value="">No specific subject</option>
-                    {subjects.map((subject) => (
-                      <option key={subject.id} value={subject.id}>
-                        {subject.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="subjectId">
+                      <SelectValue placeholder="No specific subject" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No specific subject</SelectItem>
+                      {localSubjects.map((subject) => (
+                        <SelectItem key={subject.id} value={subject.id}>
+                          {subject.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {state?.errors?.subjectId && (
                     <p className="text-xs font-medium text-destructive">
                       {state.errors.subjectId[0]}
@@ -153,16 +208,16 @@ export function TaskForm({ action, subjects, initialData }: TaskFormProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="priority">Priority</Label>
-                  <select
-                    id="priority"
-                    name="priority"
-                    defaultValue={initialData?.priority || 'MEDIUM'}
-                    className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                  </select>
+                  <Select name="priority" defaultValue={initialData?.priority || 'MEDIUM'}>
+                    <SelectTrigger id="priority">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LOW">Low</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="HIGH">High</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {state?.errors?.priority && (
                     <p className="text-xs font-medium text-destructive">
                       {state.errors.priority[0]}
@@ -172,16 +227,16 @@ export function TaskForm({ action, subjects, initialData }: TaskFormProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
-                  <select
-                    id="status"
-                    name="status"
-                    defaultValue={initialData?.status || 'PENDING'}
-                    className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="PENDING">Pending (Not Started)</option>
-                    <option value="IN_PROGRESS">In Progress</option>
-                    <option value="COMPLETED">Completed</option>
-                  </select>
+                  <Select name="status" defaultValue={initialData?.status || 'PENDING'}>
+                    <SelectTrigger id="status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PENDING">Pending (Not Started)</SelectItem>
+                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                      <SelectItem value="COMPLETED">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {state?.errors?.status && (
                     <p className="text-xs font-medium text-destructive">{state.errors.status[0]}</p>
                   )}
@@ -226,6 +281,63 @@ export function TaskForm({ action, subjects, initialData }: TaskFormProps) {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Subject Creation Modal */}
+      <Dialog open={subjectModalOpen} onOpenChange={setSubjectModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Subject</DialogTitle>
+            <DialogDescription>Add a new subject to organize your studies.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateSubject} className="space-y-4 pt-4">
+            {subjectError && (
+              <div className="flex items-center gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{subjectError}</span>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="inline-subject-name">Subject Name <span className="text-destructive">*</span></Label>
+              <Input
+                id="inline-subject-name"
+                name="name"
+                placeholder="e.g. Mathematics"
+                autoFocus
+                disabled={isPendingSubject}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inline-subject-code">Subject Code (Optional)</Label>
+              <Input
+                id="inline-subject-code"
+                name="code"
+                placeholder="e.g. MATH101"
+                disabled={isPendingSubject}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSubjectModalOpen(false)}
+                disabled={isPendingSubject}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPendingSubject}>
+                {isPendingSubject ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Subject'
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

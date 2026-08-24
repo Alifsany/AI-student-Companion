@@ -1,13 +1,20 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { UploadCloud, FileText, Trash2, ExternalLink, Loader2, FileUp, RefreshCw, Sparkles } from "lucide-react";
-import { uploadPresigned } from '@vercel/blob/client';
+import { UploadCloud, FileText, Trash2, ExternalLink, Loader2, FileUp, AlertCircle, CheckCircle2, MoreVertical } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-function formatBytes(bytes: number) { if (bytes === 0) return '0 Bytes'; const k = 1024; const sizes = ['Bytes', 'KB', 'MB', 'GB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]; }
+function formatBytes(bytes: number) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 type Document = {
   id: string;
@@ -21,19 +28,26 @@ type Document = {
   summaryError?: string | null;
 };
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
 export function DocumentManager({ userId }: { userId: string }) {
+  const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Upload State
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatusText, setUploadStatusText] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Messages
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -68,121 +82,114 @@ export function DocumentManager({ userId }: { userId: string }) {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleUpload(e.dataTransfer.files[0]);
+      processFileSelection(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleUpload(e.target.files[0]);
+      processFileSelection(e.target.files[0]);
     }
   };
 
-  const handleUpload = async (file: File) => {
+  const processFileSelection = (file: File) => {
     setError(null);
     setSuccessMsg(null);
-    setUploadProgress(0);
+    setSelectedFile(file);
     
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
-      setError("Only PDF files are supported.");
+      setError("Please choose a valid PDF file.");
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
     
     if (file.size > MAX_FILE_SIZE) {
-      setError("File is too large. Maximum allowed size is 50 MB.");
+      setError(`This PDF is larger than 20 MB (${formatBytes(file.size)}). Please choose a smaller file.`);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
+    // Automatically start upload once validated
+    executeUpload(file);
+  };
+
+  const executeUpload = async (file: File) => {
     setIsUploading(true);
-    setUploadStatusText("Requesting upload token...");
+    setUploadStatus("Uploading your PDF...");
+    setUploadProgress(0);
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    abortControllerRef.current = new AbortController();
 
     try {
-      setUploadStatusText("Uploading to secure storage...");
+      // Simulate progress since native fetch doesn't support progress events well yet
+      const progressInterval = setInterval(() => {
+        setUploadProgress(p => p >= 90 ? 90 : p + 10);
+      }, 300);
 
-      const uniqueId = crypto.randomUUID();
-      const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.\-_ ]/g, '').trim() || 'document.pdf';
-      const clientPathname = `users/${userId}/${uniqueId}-${sanitizedFilename}`;
-
-      // Upload file directly to Vercel Blob from the client using the presigned URL flow
-      const blobResult = await uploadPresigned(clientPathname, file, {
-        access: 'private',
-        handleUploadUrl: '/api/documents/upload',
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percentage = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-            setUploadProgress(percentage);
-            setUploadStatusText(`Uploading PDF... ${percentage}%`);
-          }
-        }
-      });
-
-      setUploadStatusText("Saving document record...");
-
-      // Create document record in database
-      const dbRes = await fetch("/api/documents", {
+      const res = await fetch("/api/documents/upload", {
         method: "POST",
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: blobResult.url,
-          pathname: blobResult.pathname,
-          filename: file.name,
-          size: file.size
-        }),
+        body: formData,
+        signal: abortControllerRef.current.signal,
       });
-      
-      const data = await dbRes.json();
-      
-      if (!dbRes.ok) {
-        throw new Error(data.error || "Failed to save document record");
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Upload failed. Please try again.");
       }
+
+      setUploadStatus("Preparing your study tools...");
+      setSuccessMsg("PDF added successfully! Redirecting...");
+      setDocuments(prev => [data.document, ...prev]);
       
-      setDocuments((docs) => [data, ...docs]);
-      setSuccessMsg("PDF uploaded successfully.");
-      
-      // Auto-extract
-      handleExtract(data.id);
-      
-    } catch (err) {
-      console.error("Upload error:", err);
-      setError((err instanceof Error ? err.message : String(err)) || "Upload failed. Please try again.");
-    } finally {
+      // Auto-extract logic
+      handleExtract(data.document.id);
+
+      // Navigate to the document workspace after a short delay
+      setTimeout(() => {
+        router.push(`/study/notes/${data.document.id}`);
+      }, 1000);
+
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setError("Upload canceled.");
+      } else {
+        console.error("Upload error:", err);
+        setError(err.message || "We couldn't upload your PDF right now. Please try again.");
+      }
       setIsUploading(false);
-      setUploadStatusText("");
-      setUploadProgress(0);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      // clear success message after a few seconds
-      setTimeout(() => setSuccessMsg(null), 5000);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const cancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
   const handleExtract = async (id: string, isOcr = false) => {
-    if (!isOcr) {
-      setDocuments((docs) => docs.map((d) => (d.id === id ? { ...d, status: "PROCESSING" } : d)));
-    }
-    
+    // Just trigger it in the background to start processing
     try {
       const endpoint = isOcr ? `/api/documents/${id}/extract?ocr=true` : `/api/documents/${id}/extract`;
-      const res = await fetch(endpoint, { method: "POST" });
-      const data = await res.json();
-      
-      if (res.ok && data.success) {
-        setDocuments((docs) => docs.map((d) => (d.id === id ? { ...d, status: "READY" } : d)));
-      } else if (data.error === 'NEEDS_OCR') {
-        // Fallback to OCR
-        setDocuments((docs) => docs.map((d) => (d.id === id ? { ...d, status: "RUNNING_OCR" } : d)));
-        handleExtract(id, true);
-      } else {
-        setDocuments((docs) => docs.map((d) => (d.id === id ? { ...d, status: 'FAILED', extractionError: data.message || data.error || 'Extraction failed' } : d)));
-      }
+      await fetch(endpoint, { method: "POST" });
+      // We don't necessarily need to await or block the UI here since we are redirecting
     } catch (err) { 
-      setDocuments((docs) => docs.map((d) => (d.id === id ? { ...d, status: 'FAILED', extractionError: (err instanceof Error ? err.message : String(err)) || 'Extraction failed' } : d))); 
+      console.error("Background extraction failed:", err);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this document?")) return;
+    if (!confirm("Are you sure you want to delete this document? This cannot be undone.")) return;
     
     try {
       const res = await fetch(`/api/documents/${id}`, {
@@ -201,15 +208,18 @@ export function DocumentManager({ userId }: { userId: string }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-5xl mx-auto pb-12">
+      {/* Upload Area */}
       <div 
-        className={`border-2 border-dashed rounded-xl p-8 transition-colors text-center cursor-pointer ${
-          isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:bg-muted/50"
-        } ${isUploading ? "pointer-events-none opacity-50" : ""}`}
+        className={`relative border-2 border-dashed rounded-2xl p-10 transition-all text-center ${
+          isDragging 
+            ? "border-primary bg-primary/5 scale-[1.01]" 
+            : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30"
+        } ${isUploading ? "pointer-events-none" : "cursor-pointer"}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !isUploading && fileInputRef.current?.click()}
       >
         <input 
           type="file" 
@@ -218,133 +228,151 @@ export function DocumentManager({ userId }: { userId: string }) {
           accept="application/pdf"
           className="hidden" 
         />
-        <div className="flex flex-col items-center justify-center space-y-4">
-          <div className="p-4 bg-primary/10 rounded-full">
-            {isUploading ? (
+        
+        {isUploading && selectedFile ? (
+          <div className="flex flex-col items-center justify-center space-y-4 animate-in fade-in zoom-in duration-300">
+            <div className="p-4 bg-primary/10 rounded-full">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            ) : (
-              <UploadCloud className="w-8 h-8 text-primary" />
-            )}
+            </div>
+            <div>
+              <p className="text-lg font-medium text-foreground">{uploadStatus}</p>
+              <p className="text-sm text-muted-foreground mt-1 truncate max-w-[250px] mx-auto">
+                {selectedFile.name} ({formatBytes(selectedFile.size)})
+              </p>
+            </div>
+            
+            <div className="w-full max-w-sm mx-auto mt-4">
+              <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-300 ease-out rounded-full"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={(e) => { e.stopPropagation(); cancelUpload(); }}
+              className="mt-4 pointer-events-auto"
+            >
+              Cancel
+            </Button>
           </div>
-          <div>
-            <p className="text-lg font-medium">
-              {isUploading ? uploadStatusText || "Uploading..." : "Click or drag and drop to upload"}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Maximum file size: 50 MB
-            </p>
-            {isUploading && uploadProgress > 0 && (
-               <div className="w-64 max-w-full bg-muted rounded-full h-2 mt-4 mx-auto overflow-hidden">
-                 <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
-               </div>
-            )}
+        ) : (
+          <div className="flex flex-col items-center justify-center space-y-4">
+            <div className="p-4 bg-primary/10 rounded-full text-primary group-hover:scale-110 transition-transform">
+              <FileUp className="w-8 h-8" />
+            </div>
+            <div>
+              <p className="text-xl font-semibold text-foreground">
+                Drop your PDF here
+              </p>
+              <p className="text-muted-foreground mt-1">
+                or click to choose a file from your device
+              </p>
+            </div>
+            <Badge variant="secondary" className="mt-4 font-normal text-muted-foreground">
+              PDF only • Maximum 20 MB
+            </Badge>
           </div>
-        </div>
+        )}
       </div>
 
+      {/* Messages */}
       {error && (
-        <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-lg flex items-center">
-          {error}
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Upload failed</p>
+            <p className="opacity-90">{error}</p>
+          </div>
         </div>
       )}
 
       {successMsg && (
-        <div className="bg-green-500/10 text-green-600 dark:text-green-400 text-sm p-4 rounded-lg flex items-center">
-          {successMsg}
+        <div className="bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-sm p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <p className="font-medium">{successMsg}</p>
         </div>
       )}
 
+      {/* Document List */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Your Documents</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold tracking-tight">Your Study Library</h2>
+        </div>
         
         {isLoading ? (
-          <div className="flex justify-center p-8">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary/50" />
+            <p>Loading your documents...</p>
           </div>
         ) : documents.length === 0 ? (
-          <div className="text-center p-8 border rounded-xl bg-card text-muted-foreground">
-            <FileUp className="w-12 h-12 mx-auto mb-3 opacity-20" />
-            <p>No documents uploaded yet.</p>
+          <div className="text-center py-20 px-4 border-2 border-dashed rounded-2xl bg-card/50 text-muted-foreground">
+            <FileText className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <h3 className="text-lg font-medium text-foreground mb-1">Your study library is empty</h3>
+            <p className="max-w-sm mx-auto mb-6">
+              Upload a PDF lecture, reading, or syllabus to turn it into an interactive study guide.
+            </p>
+            <Button onClick={() => fileInputRef.current?.click()}>
+              <FileUp className="w-4 h-4 mr-2" />
+              Upload your first PDF
+            </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {documents.map((doc) => (
-              <Card key={doc.id}>
-                <CardContent className="p-4 flex flex-col h-full">
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <FileText className="w-5 h-5 text-blue-500 shrink-0" />
-                      <span className="font-medium truncate" title={doc.filename}>
-                        {doc.filename}
-                      </span>
-                    </div>
-                    <Badge 
-                      variant={doc.status === "READY" ? "default" : doc.status === "FAILED" ? "destructive" : "secondary"} 
-                      className="text-[10px] uppercase shrink-0"
-                    >
-                      {doc.status}
-                    </Badge>
-                  </div>
-                  
-                  <div className="text-xs text-muted-foreground mb-4 space-y-1">
-                    <div className="flex justify-between">
-                      <span>Size:</span>
-                      <span>{formatBytes(doc.size)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Added:</span>
-                      <span>
-                        {doc.createdAt && !isNaN(new Date(doc.createdAt).getTime())
-                          ? new Date(doc.createdAt).toLocaleDateString()
-                          : "Date unavailable"}
-                      </span>
-                    </div>
-                    {doc.status === 'FAILED' && doc.extractionError && (
-                      <div className="mt-2 text-destructive/80 bg-destructive/10 p-2 rounded line-clamp-2" title={doc.extractionError}>
-                        Error: {doc.extractionError}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-auto flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="default" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => window.open(`/study/notes/${doc.id}`, '_blank')}
-                        disabled={doc.status !== "READY"}
-                      >
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Open Workspace
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="px-2"
-                        onClick={() => handleDelete(doc.id)}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+              <Card 
+                key={doc.id} 
+                className="group relative flex flex-col h-full overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => router.push(`/study/notes/${doc.id}`)}
+              >
+                <CardContent className="p-5 flex flex-col h-full">
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className="p-2.5 bg-red-500/10 rounded-lg shrink-0">
+                      <FileText className="w-6 h-6 text-red-500" />
                     </div>
                     
-                    {doc.status !== 'READY' && (
-                       <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full text-xs h-7"
-                        onClick={() => handleExtract(doc.id)}
-                        disabled={doc.status === 'PROCESSING' || doc.status === 'RUNNING_OCR'}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger 
+                        className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8 -mr-2 text-muted-foreground opacity-0 group-hover:opacity-100"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        {doc.status === 'PROCESSING' || doc.status === 'RUNNING_OCR' ? (
-                          <><Loader2 className="w-3 h-3 mr-2 animate-spin" /> Extracting Text...</>
-                        ) : (
-                          <><RefreshCw className="w-3 h-3 mr-2" /> Retry Extraction</>
-                        )}
-                      </Button>
-                    )}
+                        <MoreVertical className="w-4 h-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/study/notes/${doc.id}`); }}>
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Open Workspace
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-destructive focus:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Document
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
+                  
+                  <h3 className="font-medium line-clamp-2 mb-1" title={doc.filename}>
+                    {doc.filename}
+                  </h3>
+                  
+                  <div className="text-sm text-muted-foreground mt-auto pt-4 flex items-center justify-between">
+                    <span>{formatBytes(doc.size)}</span>
+                    <span>
+                      {new Date(doc.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                  
+                  {doc.status !== 'READY' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-secondary">
+                      <div className={`h-full ${doc.status === 'FAILED' ? 'bg-destructive' : 'bg-primary animate-pulse'}`} />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -354,5 +382,3 @@ export function DocumentManager({ userId }: { userId: string }) {
     </div>
   );
 }
-
-

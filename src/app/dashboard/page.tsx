@@ -36,53 +36,53 @@ export default async function DashboardPage() {
     : user.email[0].toUpperCase();
 
   const completionPercent = getProfileCompletion(user);
-
-  // Fetch Academic Data
-  const activeSubjectsCount = await db.subject.count({
-    where: { userId: user.id, status: 'ACTIVE' },
-  });
-
-  const subjects = await db.subject.findMany({
-    where: { userId: user.id, status: 'ACTIVE' },
-    take: 3,
-    orderBy: { name: 'asc' },
-  });
-
-  const academicRecords = await db.academicRecord.findMany({
-    where: { userId: user.id },
-    orderBy: [{ academicYear: 'desc' }, { semester: 'desc' }],
-  });
-
-  const overallCgpa = calculateGPA(academicRecords);
-
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
 
-  const todaysPlan = await db.studyPlanItem.findMany({
-    where: {
-      userId: user.id,
-      plannedDate: {
-        gte: startOfToday,
-        lte: endOfToday,
+  const [
+    activeSubjectsCount,
+    subjects,
+    academicRecords,
+    todaysPlan,
+    activeGoalsCount,
+    recentGoals,
+  ] = await Promise.all([
+    db.subject.count({ where: { userId: user.id, status: 'ACTIVE' } }),
+    db.subject.findMany({
+      where: { userId: user.id, status: 'ACTIVE' },
+      take: 3,
+      orderBy: { name: 'asc' },
+    }),
+    db.academicRecord.findMany({
+      where: { userId: user.id },
+      orderBy: [{ academicYear: 'desc' }, { semester: 'desc' }],
+    }),
+    db.studyPlanItem.findMany({
+      where: {
+        userId: user.id,
+        plannedDate: {
+          gte: startOfToday,
+          lte: endOfToday,
+        },
       },
-    },
-    include: {
-      subject: { select: { name: true, color: true } },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+      include: {
+        subject: { select: { name: true, color: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+    db.academicGoal.count({
+      where: { userId: user.id, status: { not: 'COMPLETED' } },
+    }),
+    db.academicGoal.findMany({
+      where: { userId: user.id, status: { not: 'COMPLETED' } },
+      take: 3,
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
 
-  const activeGoalsCount = await db.academicGoal.count({
-    where: { userId: user.id, status: { not: 'COMPLETED' } },
-  });
-
-  const recentGoals = await db.academicGoal.findMany({
-    where: { userId: user.id, status: { not: 'COMPLETED' } },
-    take: 3,
-    orderBy: { createdAt: 'desc' },
-  });
+  const overallCgpa = calculateGPA(academicRecords);
 
   return (
     <div className="min-h-screen bg-background">

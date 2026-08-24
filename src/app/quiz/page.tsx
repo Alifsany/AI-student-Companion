@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { verifySession } from '@/lib/dal';
 import db from '@/lib/db';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   GraduationCap,
@@ -60,12 +60,7 @@ export default async function QuizPage() {
               Generate AI-powered quizzes to test your knowledge.
             </p>
           </div>
-          <Link href="/quiz/new">
-            <Button className="flex items-center gap-2 shrink-0">
-              <Plus className="h-4 w-4" />
-              New Quiz
-            </Button>
-          </Link>
+          <Link href="/quiz/new" className={buttonVariants({ className: "flex items-center gap-2 shrink-0" })}><Plus className="h-4 w-4" />New Quiz</Link>
         </div>
 
         {/* Stats */}
@@ -105,12 +100,7 @@ export default async function QuizPage() {
                 Generate your first AI-powered quiz to test your knowledge.
               </p>
             </div>
-            <Link href="/quiz/new">
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Quiz
-              </Button>
-            </Link>
+            <Link href="/quiz/new" className={buttonVariants({ className: "flex items-center" })}><Plus className="h-4 w-4 mr-2" />New Quiz</Link>
           </div>
         ) : (
           <div className="space-y-3">

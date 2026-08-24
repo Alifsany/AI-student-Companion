@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -171,11 +171,7 @@ export function GoalForm({ initialData }: GoalFormProps) {
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEditing ? 'Save Changes' : 'Create Goal'}
               </Button>
-              <Link href="/goals" className="sm:flex-1">
-                <Button type="button" variant="outline" className="w-full" disabled={isPending}>
-                  Cancel
-                </Button>
-              </Link>
+              <Link href="/goals" className={buttonVariants({ variant: "outline", className: "w-full sm:flex-1" })}>Cancel</Link>
             </div>
           </form>
         </CardContent>

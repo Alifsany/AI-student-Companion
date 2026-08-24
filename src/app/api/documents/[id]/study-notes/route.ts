@@ -1,50 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySession } from '@/lib/dal';
+import { getValidatedDocumentContext, generateWithCache, standardErrorResponse } from '@/lib/ai/document-ai';
+import { z } from 'zod';
 import db from '@/lib/db';
-import { generateText } from 'ai';
-import { getAiModel } from '@/lib/ai-model';
+
+const StudyNotesSchema = z.object({
+  studyNotes: z.array(z.object({
+    title: z.string(),
+    content: z.string()
+  }))
+});
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await verifySession();
-    if (!session?.isAuth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id } = await params;
+    const validation = await getValidatedDocumentContext(id);
+    if (validation.error) return standardErrorResponse(validation.error);
+
+    const body = await req.json().catch(() => ({}));
+    const forceNew = !!body.forceNew;
+
+    const systemPrompt = `You are an academic assistant. Generate structured study notes from the provided document.
+Use clear headings, bullet points, concise explanations, and important terms. Do not invent information.`;
+
+    const result = await generateWithCache(
+      validation.context!,
+      'STUDY_NOTES',
+      systemPrompt,
+      StudyNotesSchema,
+      "Generate comprehensive study notes for this document.",
+      forceNew
+    );
+
+    if (!result.success) {
+      return NextResponse.json(result, { status: result.status || 500 });
     }
 
-    const { id } = await params;
-    const document = await db.document.findUnique({
-      where: { id },
-      select: { userId: true, extractedText: true }
-    });
-
-    if (!document) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-    if (document.userId !== session.userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (!document.extractedText) return NextResponse.json({ error: 'No extracted text found' }, { status: 400 });
-
-    const systemPrompt = `You are an academic study assistant.
-Generate comprehensive, structured study notes from the provided document content.
-Use the following format when appropriate:
-- Topic
-- Key Concepts
-- Definitions
-- Important Points
-- Examples
-- Exam Tips
-
-Do not invent information. Rely strictly on the document text. Output perfectly formatted markdown.`;
-
-    const { text } = await generateText({
-      model: getAiModel(),
-      system: systemPrompt,
-      prompt: `DOCUMENT CONTENT:\n${document.extractedText.slice(0, 100000)}`,
-    });
-
-    return NextResponse.json({ success: true, notes: text });
+    return NextResponse.json(result);
   } catch (error) {
-    console.error('[documents/study-notes] Server Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('[documents/study_notes] Server Error:', error);
+    return standardErrorResponse({ status: 500, code: 'INTERNAL_ERROR', message: 'An unexpected server error occurred.' });
+  }
+}
+
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const validation = await getValidatedDocumentContext(id);
+    if (validation.error) return standardErrorResponse(validation.error);
+
+    const cached = await db.documentAIResult.findUnique({
+      where: { documentId_type: { documentId: id, type: 'STUDY_NOTES' } }
+    });
+
+    if (cached && cached.status === 'READY' && cached.result) {
+      return NextResponse.json({ success: true, data: cached.result });
+    }
+    
+    return NextResponse.json({ success: true, data: null });
+  } catch (error) {
+    return standardErrorResponse({ status: 500, code: 'INTERNAL_ERROR', message: 'An unexpected server error occurred.' });
   }
 }

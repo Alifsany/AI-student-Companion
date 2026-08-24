@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, MessageSquare, Calculator, List, CheckSquare, HelpCircle } from "lucide-react";
+import { Sparkles, Calculator, List, CheckSquare, HelpCircle } from "lucide-react";
 import { SummaryTab } from "./tabs/summary-tab";
-import { AskAiTab } from "./tabs/ask-ai-tab";
 import { FormulasTab } from "./tabs/formulas-tab";
 import { KeyTopicsTab } from "./tabs/key-topics-tab";
 import { ImportantPointsTab } from "./tabs/important-points-tab";
@@ -12,14 +11,13 @@ import { cn } from "@/lib/utils";
 
 type DocumentData = { id: string; title?: string; extractedText?: string | null; summary?: string | null; summaryError?: string | null; extractedData?: { keyTopics?: { title: string, explanation: string }[]; importantPoints?: string[]; formulas?: { formula: string, explanation: string }[]; studyNotes?: { title: string, content: string }[]; quiz?: Record<string, unknown>; }; createdAt?: Date | string; updatedAt?: Date | string; [key: string]: any };
 
-type TabValue = "summary" | "ask" | "formulas" | "topics" | "points" | "quiz";
+type TabValue = "summary" | "formulas" | "topics" | "points" | "quiz";
 
 export function AiToolsPanel({ document }: { document: DocumentData }) {
   const [activeTab, setActiveTab] = useState<TabValue>("summary");
 
   const tabs = [
     { id: "summary", label: "Summary", icon: Sparkles },
-    { id: "ask", label: "Ask AI", icon: MessageSquare },
     { id: "formulas", label: "Formulas", icon: Calculator },
     { id: "topics", label: "Key Topics", icon: List },
     { id: "points", label: "Important Points", icon: CheckSquare },
@@ -76,7 +74,6 @@ export function AiToolsPanel({ document }: { document: DocumentData }) {
           aria-labelledby={`ai-tool-tab-${activeTab}`}
         >
           {activeTab === "summary" && <div className="h-full animate-in fade-in duration-200"><SummaryTab document={document} /></div>}
-          {activeTab === "ask" && <div className="h-full animate-in fade-in duration-200"><AskAiTab document={document} /></div>}
           {activeTab === "formulas" && <div className="h-full animate-in fade-in duration-200"><FormulasTab document={document} /></div>}
           {activeTab === "topics" && <div className="h-full animate-in fade-in duration-200"><KeyTopicsTab document={document} /></div>}
           {activeTab === "points" && <div className="h-full animate-in fade-in duration-200"><ImportantPointsTab document={document} /></div>}

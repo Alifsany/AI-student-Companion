@@ -3,8 +3,9 @@
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { Timer, CheckCircle2, Play, XCircle, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -91,14 +92,13 @@ export function PlanItemCard({
           </Badge>
 
           <DropdownMenu>
-            <DropdownMenuTrigger>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="-mr-2 -mt-2 h-8 w-8 text-muted-foreground hover:text-foreground"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
+            <DropdownMenuTrigger
+              className={cn(
+                buttonVariants({ variant: 'ghost', size: 'icon' }),
+                '-mr-2 -mt-2 h-8 w-8 text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem

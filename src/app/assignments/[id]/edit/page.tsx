@@ -31,6 +31,12 @@ export default async function EditAssignmentPage({ params }: Props) {
   }
 
   // Fetch subjects to populate the dropdown
+  const tasks = await db.academicTask.findMany({
+    where: { userId: session.userId, status: { not: 'COMPLETED' } },
+    select: { id: true, title: true, subjectId: true },
+    orderBy: { dueDate: 'asc' },
+  });
+
   const subjects = await db.subject.findMany({
     where: { userId: session.userId },
     select: { id: true, name: true },

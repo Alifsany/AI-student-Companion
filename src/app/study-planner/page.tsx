@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { verifySession } from '@/lib/dal';
 import db from '@/lib/db';
-import {  buttonVariants } from '@/components/ui/button';
-import { Card, CardContent,    } from '@/components/ui/card';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus,   } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { PlanItemCard } from './plan-item-card';
 
 export const metadata = {
-  title: 'Study Planner — AI Student Companion',
+  title: 'Study Planner - AI Student Companion',
 };
 
 function formatDuration(seconds: number) {
@@ -20,18 +20,30 @@ function formatDuration(seconds: number) {
 }
 
 function getWeekBoundaries(dateString?: string | null) {
-  const date = dateString ? new Date(dateString) : new Date();
-  // Ensure we are working with midnight boundary
-  date.setHours(0, 0, 0, 0);
+  let year, month, day;
+  if (dateString) {
+    const [y, m, d] = dateString.split('-');
+    year = Number(y);
+    month = Number(m) - 1;
+    day = Number(d);
+  } else {
+    const date = new Date();
+    year = date.getFullYear();
+    month = date.getMonth();
+    day = date.getDate();
+  }
+
+  const utcDate = new Date(Date.UTC(year, month, day));
 
   // Normalize to Monday start
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-  const startOfWeek = new Date(date.setDate(diff));
+  const dayOfWeek = utcDate.getUTCDay();
+  const diff = utcDate.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+
+  const startOfWeek = new Date(Date.UTC(year, month, diff));
 
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  endOfWeek.setHours(23, 59, 59, 999);
+  endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
+  endOfWeek.setUTCHours(23, 59, 59, 999);
 
   return { startOfWeek, endOfWeek };
 }
@@ -48,7 +60,7 @@ export default async function StudyPlannerPage({
   let dateParam = typeof resolvedParams.date === 'string' ? resolvedParams.date : undefined;
 
   // Validate date format safely
-  if (dateParam && isNaN(new Date(dateParam).getTime())) {
+  if (dateParam && !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
     dateParam = undefined;
   }
 
@@ -56,14 +68,15 @@ export default async function StudyPlannerPage({
 
   // Navigation dates
   const prevWeek = new Date(startOfWeek);
-  prevWeek.setDate(startOfWeek.getDate() - 7);
+  prevWeek.setUTCDate(startOfWeek.getUTCDate() - 7);
   const prevWeekStr = prevWeek.toISOString().split('T')[0];
 
   const nextWeek = new Date(startOfWeek);
-  nextWeek.setDate(startOfWeek.getDate() + 7);
+  nextWeek.setUTCDate(startOfWeek.getUTCDate() + 7);
   const nextWeekStr = nextWeek.toISOString().split('T')[0];
 
-  const currentWeekStr = new Date().toISOString().split('T')[0];
+  const currentLocal = new Date();
+  const currentWeekStr = `${currentLocal.getFullYear()}-${String(currentLocal.getMonth() + 1).padStart(2, '0')}-${String(currentLocal.getDate()).padStart(2, '0')}`;
 
   const planItems = await db.studyPlanItem.findMany({
     where: {
@@ -98,18 +111,19 @@ export default async function StudyPlannerPage({
     const planIds = planItems.map((p) => p.id);
     const sessions = await db.studySession.findMany({
       where: { studyPlanItemId: { in: planIds }, status: 'COMPLETED' },
-      select: { duration: true, studyPlanItemId: true },
+      select: { duration: true },
     });
     totalCompleted = sessions.reduce((sum, s) => sum + s.duration, 0);
   }
 
-  const completionPct = totalPlanned > 0 ? Math.round((totalCompleted / totalPlanned) * 100) : 0;
+  const completionPct =
+    totalPlanned > 0 ? Math.min(100, Math.round((totalCompleted / totalPlanned) * 100)) : 0;
 
   // Group by day (Monday to Sunday)
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
+    d.setUTCDate(startOfWeek.getUTCDate() + i);
     const dateStr = d.toISOString().split('T')[0];
     const items = planItems.filter((item) => {
       // Safely compare using UTC YYYY-MM-DD string
@@ -121,8 +135,9 @@ export default async function StudyPlannerPage({
     days.push({
       date: d,
       dateStr,
-      label: d.toLocaleDateString('en-US', { weekday: 'long' }),
-      shortLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      // Pass UTC date string directly instead of relying on browser timezone formatting
+      label: d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+      shortLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
       items,
       dayPlanned,
     });
@@ -187,8 +202,8 @@ export default async function StudyPlannerPage({
                 <CalendarDays className="h-4 w-4" /> This Week
               </span>
               <span className="text-xl font-bold">
-                {startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} -{' '}
-                {endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} -{' '}
+                {endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
               </span>
             </CardContent>
           </Card>

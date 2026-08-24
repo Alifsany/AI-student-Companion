@@ -1,16 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySession } from '@/lib/dal';
+import { getSession } from '@/lib/session';
 import db from '@/lib/db';
 import { readFile, unlink } from 'fs/promises';
 import { del, get } from '@vercel/blob';
+import path from 'path';
+
+function getValidatedLocalPath(fileUrl: string, userId: string): string {
+  if (!fileUrl.startsWith('file://')) throw new Error('Not a local file URL');
+  let localPath = fileUrl.replace('file://', '');
+  
+  if (process.platform === 'win32' && localPath.match(/^\/[a-zA-Z]:\//)) {
+    localPath = localPath.substring(1);
+  }
+  
+  const normalizedPath = path.resolve(localPath);
+  const expectedPrefix = path.resolve(process.cwd(), '.local-storage', 'documents', 'users', userId);
+  
+  if (!normalizedPath.startsWith(expectedPrefix)) {
+    throw new Error('Path traversal detected or invalid directory');
+  }
+  
+  return normalizedPath;
+}
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await verifySession();
-    if (!session?.isAuth) {
+    const session = await getSession();
+    if (!session?.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -28,19 +47,32 @@ export async function GET(
     }
 
     if (document.fileUrl.startsWith('http')) {
-      const getBlobResult = await get(document.fileUrl, { access: 'private' });
-      if (!getBlobResult || !getBlobResult.stream) {
-        return NextResponse.json({ error: 'Private blob not found or could not be streamed.' }, { status: 404 });
+      try {
+        const getBlobResult = await get(document.fileUrl, { 
+          access: 'private'
+        });
+        
+        if (getBlobResult && getBlobResult.stream) {
+          return new NextResponse(getBlobResult.stream as unknown as ReadableStream, {
+            headers: {
+              'Content-Type': 'application/pdf',
+              'Content-Disposition': `inline; filename="${document.filename}"`,
+            },
+          });
+        } else {
+          return NextResponse.json({ error: 'Blob not found or could not be streamed.' }, { status: 404 });
+        }
+      } catch (blobError: any) {
+        console.warn('[documents/[id]] Vercel Blob streaming failed. Error:', blobError.message);
+        return NextResponse.json(
+          { error: 'Failed to access document storage. Missing or invalid Blob credentials.' },
+          { status: 500 }
+        );
       }
-      return new NextResponse(getBlobResult.stream, {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `inline; filename="${document.filename}"`,
-        },
-      });
     }
 
-    const fileBuffer = await readFile(document.fileUrl);
+    const localPath = getValidatedLocalPath(document.fileUrl, session.userId);
+    const fileBuffer = await readFile(localPath);
 
     return new NextResponse(fileBuffer, {
       headers: {
@@ -59,8 +91,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await verifySession();
-    if (!session?.isAuth) {
+    const session = await getSession();
+    if (!session?.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -81,7 +113,8 @@ export async function DELETE(
       if (document.fileUrl.startsWith('http')) {
         await del(document.fileUrl);
       } else {
-        await unlink(document.fileUrl);
+        const localPath = getValidatedLocalPath(document.fileUrl, session.userId);
+        await unlink(localPath);
       }
     } catch (fsError: any) {
       if (fsError.code !== 'ENOENT') {

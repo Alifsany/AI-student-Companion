@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -21,9 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle, ArrowLeft, CalendarDays } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CalendarDays, Loader2, Plus } from 'lucide-react';
 import { type FormState } from '@/lib/validations';
 import { StudyPlanItem } from '@/generated/prisma/client';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { createSubjectInline, createGoalInline, createTaskInline } from '@/actions/study-planner-inline';
 
 type Subject = { id: string; name: string };
 type Task = { id: string; title: string; subjectId: string | null };
@@ -40,23 +42,94 @@ type PlannerFormProps = {
 
 export function PlannerForm({
   action,
-  subjects,
-  tasks,
-  goals,
+  subjects: initialSubjects,
+  tasks: initialTasks,
+  goals: initialGoals,
   initialData,
   defaultDate,
 }: PlannerFormProps) {
   const [state, formAction, isPending] = useActionState(action, undefined);
+  
+  // Local state for dynamically added entities
+  const [localSubjects, setLocalSubjects] = useState<Subject[]>(initialSubjects);
+  const [localTasks, setLocalTasks] = useState<Task[]>(initialTasks);
+  const [localGoals, setLocalGoals] = useState<Goal[]>(initialGoals);
+
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialData?.subjectId || '');
+  const [selectedGoalId, setSelectedGoalId] = useState<string>(initialData?.goalId || '');
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(initialData?.taskId || '');
+
+  // Modals state
+  const [subjectModalOpen, setSubjectModalOpen] = useState(false);
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+
+  // Transitions
+  const [isPendingSubject, startTransitionSubject] = useTransition();
+  const [isPendingGoal, startTransitionGoal] = useTransition();
+  const [isPendingTask, startTransitionTask] = useTransition();
 
   const filteredTasks = selectedSubjectId
-    ? tasks.filter((t) => t.subjectId === selectedSubjectId || !t.subjectId)
-    : tasks;
+    ? localTasks.filter((t) => t.subjectId === selectedSubjectId || !t.subjectId)
+    : localTasks;
 
-  // Format YYYY-MM-DD for date input
-  let formattedDate = defaultDate || new Date().toISOString().split('T')[0];
-  if (initialData?.plannedDate) {
-    formattedDate = new Date(initialData.plannedDate).toISOString().split('T')[0];
+  let formattedDate = defaultDate;
+  if (!formattedDate) {
+    const localNow = new Date();
+    const y = localNow.getFullYear();
+    const m = String(localNow.getMonth() + 1).padStart(2, '0');
+    const d = String(localNow.getDate()).padStart(2, '0');
+    formattedDate = `${y}-${m}-${d}`;
+  }
+
+  async function handleCreateSubject(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const name = fd.get('name') as string;
+    const code = fd.get('code') as string;
+    startTransitionSubject(async () => {
+      const res = await createSubjectInline(name, code);
+      if (res.success && res.id && res.name) {
+        setLocalSubjects((prev) => [...prev, { id: res.id!, name: res.name! }]);
+        setSelectedSubjectId(res.id || '');
+        setSubjectModalOpen(false);
+      } else {
+        alert(res.message);
+      }
+    });
+  }
+
+  async function handleCreateGoal(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const title = fd.get('title') as string;
+    const targetDate = fd.get('targetDate') as string;
+    startTransitionGoal(async () => {
+      const res = await createGoalInline(title, targetDate);
+      if (res.success && res.id && res.title) {
+        setLocalGoals((prev) => [...prev, { id: res.id!, title: res.title! }]);
+        setSelectedGoalId(res.id || '');
+        setGoalModalOpen(false);
+      } else {
+        alert(res.message);
+      }
+    });
+  }
+
+  async function handleCreateTask(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const title = fd.get('title') as string;
+    startTransitionTask(async () => {
+      const res = await createTaskInline(title, selectedSubjectId);
+      if (res.success && res.id && res.title) {
+        setLocalTasks((prev) => [...prev, { id: res.id!, title: res.title!, subjectId: res.subjectId || null }]);
+        setSelectedTaskId(res.id || '');
+        setTaskModalOpen(false);
+      } else {
+        alert(res.message);
+      }
+    });
   }
 
   return (
@@ -149,18 +222,26 @@ export function PlannerForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="subjectId">Subject (Optional)</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="subjectId">Subject (Optional)</Label>
+                  <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setSubjectModalOpen(true)}>
+                    <Plus className="w-3 h-3 mr-1" /> Create Subject
+                  </Button>
+                </div>
                 <Select
                   name="subjectId"
-                  defaultValue={initialData?.subjectId || undefined}
-                  onValueChange={(val) => setSelectedSubjectId(val === ' ' ? '' : (val as string))}
+                  value={selectedSubjectId || 'none'}
+                  onValueChange={(val) => {
+                     const v = val === 'none' ? '' : val;
+                     setSelectedSubjectId(v || '');
+                  }}
                 >
                   <SelectTrigger id="subjectId">
                     <SelectValue placeholder="Select a subject" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None (General Study)</SelectItem>
-                    {subjects.map((s) => (
+                    {localSubjects.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}
                       </SelectItem>
@@ -171,17 +252,20 @@ export function PlannerForm({
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="taskId">Related Task (Optional)</Label>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="taskId">Related Task (Optional)</Label>
+                    <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setTaskModalOpen(true)}>
+                      <Plus className="w-3 h-3 mr-1" /> Create Task
+                    </Button>
+                  </div>
                   <Select
                     name="taskId"
-                    defaultValue={initialData?.taskId || undefined}
-                    disabled={filteredTasks.length === 0}
+                    value={selectedTaskId || 'none'}
+                    onValueChange={(val) => setSelectedTaskId(val === 'none' ? '' : (val || ''))}
                   >
                     <SelectTrigger id="taskId">
                       <SelectValue
-                        placeholder={
-                          filteredTasks.length === 0 ? 'No tasks available' : 'Select a task'
-                        }
+                        placeholder={filteredTasks.length === 0 ? 'No tasks available' : 'Select a task'}
                       />
                     </SelectTrigger>
                     <SelectContent>
@@ -196,20 +280,25 @@ export function PlannerForm({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="goalId">Related Goal (Optional)</Label>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="goalId">Related Goal (Optional)</Label>
+                    <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setGoalModalOpen(true)}>
+                      <Plus className="w-3 h-3 mr-1" /> Create Goal
+                    </Button>
+                  </div>
                   <Select
                     name="goalId"
-                    defaultValue={initialData?.goalId || undefined}
-                    disabled={goals.length === 0}
+                    value={selectedGoalId || 'none'}
+                    onValueChange={(val) => setSelectedGoalId(val === 'none' ? '' : (val || ''))}
                   >
                     <SelectTrigger id="goalId">
                       <SelectValue
-                        placeholder={goals.length === 0 ? 'No goals available' : 'Select a goal'}
+                        placeholder={localGoals.length === 0 ? 'No goals available' : 'Select a goal'}
                       />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {goals.map((g) => (
+                      {localGoals.map((g) => (
                         <SelectItem key={g.id} value={g.id}>
                           {g.title}
                         </SelectItem>
@@ -247,6 +336,82 @@ export function PlannerForm({
           </CardFooter>
         </form>
       </Card>
+
+      <Dialog open={subjectModalOpen} onOpenChange={setSubjectModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Subject</DialogTitle>
+            <DialogDescription>Add a new subject to organize your studies.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateSubject} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-subject-name">Subject Name <span className="text-destructive">*</span></Label>
+              <Input id="new-subject-name" name="name" required placeholder="e.g. Mathematics" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-subject-code">Subject Code (Optional)</Label>
+              <Input id="new-subject-code" name="code" placeholder="e.g. MATH101" />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSubjectModalOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isPendingSubject}>
+                {isPendingSubject && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={goalModalOpen} onOpenChange={setGoalModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Goal</DialogTitle>
+            <DialogDescription>Set a new academic goal.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateGoal} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-goal-title">Goal Title <span className="text-destructive">*</span></Label>
+              <Input id="new-goal-title" name="title" required placeholder="e.g. Improve Math GPA" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-goal-date">Target Date (Optional)</Label>
+              <Input id="new-goal-date" name="targetDate" type="date" />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setGoalModalOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isPendingGoal}>
+                {isPendingGoal && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={taskModalOpen} onOpenChange={setTaskModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Task</DialogTitle>
+            <DialogDescription>Add a specific task to complete.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateTask} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-task-title">Task Title <span className="text-destructive">*</span></Label>
+              <Input id="new-task-title" name="title" required placeholder="e.g. Complete Chapter 5 exercises" />
+            </div>
+            {selectedSubjectId ? (
+              <p className="text-sm text-muted-foreground">This task will automatically be linked to the currently selected Subject.</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">This task will not be linked to any specific Subject since none is selected.</p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setTaskModalOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isPendingTask}>
+                {isPendingTask && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

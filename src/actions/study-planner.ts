@@ -22,7 +22,7 @@ export async function createStudyPlan(state: FormState, formData: FormData): Pro
   if (!validatedFields.success) {
     return {
       errors: validatedFields.error.flatten().fieldErrors,
-      message: 'Please check your inputs and try again.',
+      message: 'Could not create the study plan. Please check the highlighted fields.',
     };
   }
 
@@ -55,8 +55,9 @@ export async function createStudyPlan(state: FormState, formData: FormData): Pro
     }
 
     // We want plannedDate to act as the YYYY-MM-DD boundary.
-    // We parse it natively as UTC to avoid local timezone drifts on the boundary.
-    const dateBoundary = new Date(plannedDate);
+    // We parse it safely as UTC to avoid local timezone drifts on the boundary.
+    const [y, m, d] = plannedDate.split('-');
+    const dateBoundary = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
 
     await db.studyPlanItem.create({
       data: {
@@ -100,7 +101,7 @@ export async function updateStudyPlan(
   if (!validatedFields.success) {
     return {
       errors: validatedFields.error.flatten().fieldErrors,
-      message: 'Please check your inputs and try again.',
+      message: 'Could not create the study plan. Please check the highlighted fields.',
     };
   }
 
@@ -137,7 +138,8 @@ export async function updateStudyPlan(
       if (!goal) return { message: 'Invalid goal or unauthorized.' };
     }
 
-    const dateBoundary = new Date(plannedDate);
+    const [y, m, d] = plannedDate.split('-');
+    const dateBoundary = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
 
     await db.studyPlanItem.update({
       where: { id },

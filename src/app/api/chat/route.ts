@@ -235,8 +235,7 @@ Always format your response cleanly in Markdown.`;
     const result = streamText({
       model: getAiModel(),
       system: systemPrompt,
-      // convertToModelMessages converts V4 UIMessage (parts[]) format to the
-      // CoreMessage format (role + content) that the language model expects
+      abortSignal: req.signal,
       messages: await convertToModelMessages(messages.map((m: any) => ({ ...m, parts: m.parts || [{ type: 'text', text: m.content || '' }] }))),
       async onFinish({ text }) {
         // Persist the assistant's response to the database

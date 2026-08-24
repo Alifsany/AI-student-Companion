@@ -58,16 +58,6 @@ export function OverviewTab({ document, onNavigate }: { document: DocumentData, 
           </CardHeader>
         </Card>
 
-        <Card className="hover:border-primary/50 transition-colors cursor-pointer" onClick={() => onNavigate("ask-ai")}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="w-5 h-5 text-green-500" />
-              Ask AI
-            </CardTitle>
-            <CardDescription>Ask specific questions and get answers directly from this document.</CardDescription>
-          </CardHeader>
-        </Card>
-
         <Card className="hover:border-primary/50 transition-colors cursor-pointer" onClick={() => onNavigate("study-notes")}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
